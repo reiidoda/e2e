@@ -836,7 +836,7 @@ export class PlaywrightSurface {
           this.requireSession().requireObservation();
           return performViewportSwipe(page, action.direction, action.momentum ?? 'none');
         }
-        return dispatchLocatorAction(this.requireSession().refs.lookup(ref), action, currentOperation.timeoutMs, (other) =>
+        return dispatchLocatorAction(this.requireSession().refs.lookup(ref), action, currentOperation, (other) =>
           this.requireSession().refs.lookup(other),
         );
       },
