@@ -320,7 +320,8 @@ Entries are neither written nor evicted, including after a failure.
 
 `agent.assert()`, `agent.waitFor()`, and `agent.extract()` have no replayable
 recordings and fail with the same code. An executor declaring `cache: 'off'`
-cannot run in this mode either. Use deterministic `expect(screen.*)` checks
+cannot run in this mode either. Switch to a cache-capable executor to record
+and replay, or run that executor without replay-only. Use deterministic `expect(screen.*)` checks
 to verify replayed actions. No model or provider credentials are required.
 
 A replay can execute a recorded prefix before discovering a divergence;
