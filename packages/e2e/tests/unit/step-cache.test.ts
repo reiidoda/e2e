@@ -1240,6 +1240,27 @@ describe('cache.replayOnly', () => {
     },
   );
 
+  it('names an unreadable store, not the recording, and advises restoring access rather than re-recording', async () => {
+    const offline = fakeContext(async () => { throw new Error('offline'); });
+    const session = makeSession({ ...offline, mode: 'read-only', replayOnly: true }, makeHost(['/pricing']));
+    const failure = session.begin();
+    await expect(failure).rejects.toMatchObject({ code: 'REPLAY_MISSING', message: expect.stringContaining('the cache store could not be read') });
+    await expect(failure).rejects.toThrow('restore access to the store');
+    await expect(failure).rejects.not.toThrow('does not replay');
+    await expect(failure).rejects.not.toThrow('re-record');
+  });
+
+  it('says a damaged recording does not replay and how to re-record it', async () => {
+    const damaged = fakeContext(async () => ({ status: 'invalid', reason: 'damaged', bytes: 1 }));
+    const session = makeSession({ ...damaged, mode: 'read-only', replayOnly: true }, makeHost(['/pricing']));
+    const failure = session.begin();
+    await expect(failure).rejects.toMatchObject({
+      code: 'REPLAY_MISSING',
+      message: expect.stringContaining('the recording of this step does not replay (invalid-entry)'),
+    });
+    await expect(failure).rejects.toThrow('to re-record, run with cache.mode');
+  });
+
   it('replays a complete recording zero-turn', async () => {
     const cache = { ...entryContext({}), mode: 'read-only' as const, replayOnly: true };
     const session = makeSession(cache, makeHost(['/pricing', '/customers']));

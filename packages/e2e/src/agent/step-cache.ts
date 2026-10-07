@@ -251,7 +251,7 @@ export class StepTraceSession {
     if (read.status === 'miss') {
       await this.captureStart(this.recorder === undefined ? 'path-only' : 'baseline');
       this.info = this.missed(read.reason, 0);
-      this.failIfReplayOnly();
+      this.failIfReplayOnly(read.unavailable === true);
       if (read.unavailable !== true) this.failIfStale();
       if (read.reason === 'no-entry') await this.failIfRekeyed();
       return undefined;
@@ -272,9 +272,19 @@ export class StepTraceSession {
     return verdict;
   }
 
-  /** Refuses every hand-off in replay-only mode, including missing or unreadable entries. */
-  private failIfReplayOnly(): void {
+  /**
+   * Refuses every hand-off in replay-only mode, including missing or
+   * unreadable entries. A store that could not be read at all says so: the
+   * recording may be intact, and access to the store is what to restore.
+   */
+  private failIfReplayOnly(unavailable = false): void {
     if (this.cache.replayOnly !== true) return;
+    if (unavailable) {
+      throw new AgentError(
+        'REPLAY_MISSING',
+        'the cache store could not be read, and replay-only mode never hands a step to the agent; restore access to the store, then rerun',
+      );
+    }
     const reason = this.info?.reason ?? 'no-entry';
     const what = reason === 'no-entry' ? 'this step has no recording to replay' : `the recording of this step does not replay (${reason})`;
     throw new AgentError(
