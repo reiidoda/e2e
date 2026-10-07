@@ -2,4 +2,4 @@
 "@e2e-dev/mobile": patch
 ---
 
-Start device-screen video on the worker's selected device, so a test after `device.closeApp()` can record when several simulators or emulators are booted.
+Forward the worker's device selection with recording, app state resets, device settings, alerts, and clipboard requests. Commands that support running without an open app stay on the selected device after `device.closeApp()` ends the session, even when several simulators or emulators are booted.

@@ -279,6 +279,10 @@ On simulators and emulators, device-screen video follows the worker's device
 selection even after `device.closeApp()`. Physical iOS devices require an open
 app to record. Pin `device` when several devices are booted.
 
+`app.clearState()` and device-management commands also use the worker's
+selected device after `device.closeApp()` ends the session. Commands that
+require an open app still need one.
+
 `@e2e-dev/mobile` drives iOS simulators, Android emulators, and connected
 phones through [agent-device](https://github.com/callstack/agent-device);
 needs Xcode with a simulator runtime or the Android SDK with an emulator (a

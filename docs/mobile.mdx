@@ -86,8 +86,10 @@ workflows for [GitHub Actions](/ci/github-actions#ios-and-android),
 (`app.open()`, `app.restart()`, `app.clearState()`): the process arguments on
 iOS, `am start` arguments on Android. `app.permissions` are set before each of
 those launches, so the app starts holding them and no system prompt appears;
-`app.clearState()` puts them back after it reset them with the data. `deny`
-differs by platform: iOS records the refusal and the app is told no without
+`app.clearState()` puts them back after it reset them with the data. App state
+resets and device-management commands use the worker's selected device even after `device.closeApp()` ends the session. Commands that require
+an open app still need one.
+`deny` differs by platform: iOS records the refusal and the app is told no without
 a prompt, Android revokes the permission and the OS asks again when the app
 requests it. The warm-up in `prepare` starts the iOS runner with
 agent-device's `prepare ios-runner`, whose startup budget covers a cold
