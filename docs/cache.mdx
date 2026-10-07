@@ -290,6 +290,46 @@ after it records them again. A file changes when:
 A replay that still finds every control refreshes nothing, so an entry for a
 drifting UI is repaired only once a control can no longer be found.
 
+## Replay-only runs
+
+Set `cache: { replayOnly: true }` or pass `--replay-only` to gate a run on
+its recorded `agent.act()` steps with zero model calls:
+
+<CodeGroup>
+```bash npm
+npx e2e run --replay-only
+```
+```bash pnpm
+pnpm exec e2e run --replay-only
+```
+```bash bun
+bunx e2e run --replay-only
+```
+</CodeGroup>
+
+```ts
+cache: { replayOnly: true },
+```
+
+Replay-only implies strict and `read-only`, even when the configured mode is
+`off` or `read-write`. It replays on retries too. A missing, unreadable, stale,
+truncated, or incomplete recording fails with `REPLAY_MISSING`, exit 2,
+without resolving a model or invoking an executor. This also covers older
+recordings under a different cache key and an unavailable custom store.
+Entries are neither written nor evicted, including after a failure.
+
+`agent.assert()`, `agent.waitFor()`, and `agent.extract()` have no replayable
+recordings and fail with the same code. An executor declaring `cache: 'off'`
+cannot run in this mode either. Use deterministic `expect(screen.*)` checks
+to verify replayed actions. No model or provider credentials are required.
+
+A replay can execute a recorded prefix before discovering a divergence;
+replay-only stops there without handing the remaining work to an executor.
+To re-record, remove `--replay-only`, set `cache.replayOnly` and `cache.strict`
+to `false`, omit `--strict-cache`, and run with `cache.mode: 'read-write'`.
+`--no-cache` cannot be combined with replay-only and fails at config load.
+Without replay-only, the existing cache modes and strict behavior are unchanged.
+
 ## Fail on a stale recording
 
 A committed recording that stops replaying is quiet by default: the agent

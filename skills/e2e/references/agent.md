@@ -280,6 +280,15 @@ matches. Misses and hand-offs use the model; `agent.assert`,
   calls every run; re-record locally and commit. Unrecorded steps still run
   live.
 
+- For a gate with zero model calls, set `cache: { replayOnly: true }` or
+  pass `--replay-only`. It implies strict and read-only and replays on retries.
+  Missing, stale, incomplete, or unavailable recordings fail with
+  `REPLAY_MISSING`, exit 2, without invoking an executor or resolving a model.
+  Entries are never written or evicted. `agent.assert`, `agent.waitFor`, and
+  `agent.extract` cannot replay; use deterministic `expect(screen.*)` checks.
+  Executors with `cache: 'off'` are refused. Omit replay-only and strict to
+  re-record read-write. `--no-cache` conflicts with replay-only.
+
 ## Inspect what the model did
 
 ```bash

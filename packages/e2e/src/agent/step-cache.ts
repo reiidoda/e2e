@@ -247,6 +247,7 @@ export class StepTraceSession {
     if (read.status === 'miss') {
       await this.captureStart(this.recorder === undefined ? 'path-only' : 'baseline');
       this.info = this.missed(read.reason, 0);
+      this.failIfReplayOnly();
       if (read.unavailable !== true) this.failIfStale();
       if (read.reason === 'no-entry') await this.failIfRekeyed();
       return undefined;
@@ -261,9 +262,19 @@ export class StepTraceSession {
     const verdict = await this.replayEntry(read.entry);
     if (verdict === undefined) {
       this.host.replaying(false);
+      this.failIfReplayOnly();
       this.failIfStale();
     }
     return verdict;
+  }
+
+  /** Refuses every hand-off in replay-only mode, including missing or unreadable entries. */
+  private failIfReplayOnly(): void {
+    if (this.cache.replayOnly !== true) return;
+    throw new AgentError(
+      'REPLAY_MISSING',
+      `this step has no replayable recording (${this.info?.reason ?? 'no-entry'}); disable cache.replayOnly and --replay-only to re-record with a read-write run`,
+    );
   }
 
   /**

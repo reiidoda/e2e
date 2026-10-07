@@ -61,6 +61,8 @@ export interface ClaimedKey {
 
 export interface AgentCacheContext {
   readonly mode: 'read-only' | 'read-write';
+  /** Never hand a cache miss to an executor. */
+  readonly replayOnly?: boolean;
   readonly store: CacheStore;
   /** Whether this attempt may replay; writes are governed by `mode` alone. */
   readonly replayEligible: boolean;
@@ -259,7 +261,8 @@ export function createAgentCacheContext(options: {
   return {
     mode,
     store,
-    replayEligible: options.attemptIndex === 0,
+    replayOnly: options.cache.replayOnly === true,
+    replayEligible: options.cache.replayOnly === true || options.attemptIndex === 0,
     strict:
       options.cache.strict === false
         ? false
@@ -303,6 +306,7 @@ export function createAgentCacheContext(options: {
  */
 function staleAdvice(cache: ResolvedCacheConfig, source: CacheStrictSource, projectRoot: string): string {
   const off = [
+    ...(cache.replayOnly === true ? ['without --replay-only and with cache.replayOnly set to false'] : []),
     ...(source.flag ? ['without --strict-cache'] : []),
     ...(source.config ? ['with cache.strict set to false'] : []),
   ].join(' and ');

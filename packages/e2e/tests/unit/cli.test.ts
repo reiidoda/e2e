@@ -529,6 +529,7 @@ describe('e2e --version and --help', () => {
       '--max-failures',
       '--repeat-each',
       '--no-cache',
+      '--replay-only',
       '--strict-cache',
       '--reporter',
       '--output',

@@ -473,6 +473,9 @@ class ActDispatch {
   private async dispatchStep(): Promise<StepVerdict> {
     const replayed = await this.stepCache?.begin();
     if (replayed !== undefined) return replayed;
+    if (this.runtime.config.cache.replayOnly === true) {
+      throw new AgentError('REPLAY_MISSING', `${this.spec.api} has no replayable recording; replay-only mode never invokes an executor`);
+    }
     return this.agent.executor.runStep(this.context());
   }
 

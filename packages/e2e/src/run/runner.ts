@@ -110,6 +110,8 @@ export interface RunOptions {
   noCache?: boolean | undefined;
   /** Turns `cache.strict` on (`--strict-cache`): a recording that no longer replays fails its step. */
   strictCache?: boolean | undefined;
+  /** Require replayable recordings and never resolve models (--replay-only). */
+  replayOnly?: boolean | undefined;
   /**
    * The configured agents unpinned tests run as (`--agent`), instead of
    * `agents.default`. Several names run every such test once per agent.
@@ -332,6 +334,7 @@ export async function run(options: RunOptions = {}): Promise<RunOutcome> {
   if (options.reporters !== undefined) cli.reporters = options.reporters;
   if (options.noCache === true) cli.cache = 'off';
   if (options.strictCache === true) cli.cacheStrict = true;
+  if (options.replayOnly === true) cli.replayOnly = true;
   if (options.output !== undefined) cli.output = options.output;
   if (options.trace !== undefined) cli.trace = options.trace;
   if (options.video !== undefined) cli.video = options.video;

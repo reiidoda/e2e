@@ -105,6 +105,8 @@ export interface ResolvedConfig {
  */
 export interface ResolvedCacheConfig {
   readonly mode: CacheMode;
+  /** Replayable recordings only; never dispatch live work. */
+  readonly replayOnly?: boolean;
   /** Custom entry store; undefined selects the file store at `dir`. */
   readonly store: CacheStore | undefined;
   /** Absolute file store directory. */
@@ -136,6 +138,8 @@ export interface CliOverrides {
   cache?: CacheMode;
   /** `--strict-cache`: turns `cache.strict` on for the run. */
   cacheStrict?: boolean;
+  /** --replay-only: require recordings without resolving a model. */
+  replayOnly?: boolean;
   /** `--output <dir>`: the results directory for this run, over the config's `output`. */
   output?: string;
   /** `--trace [mode]`: which attempts record a trace, over the config's and every target's `trace`. */
@@ -169,7 +173,7 @@ const TOP_LEVEL_KEYS = new Set([
   'secrets',
 ]);
 
-const CACHE_KEYS = new Set(['mode', 'store', 'dir', 'strict']);
+const CACHE_KEYS = new Set(['mode', 'store', 'dir', 'strict', 'replayOnly']);
 const CACHE_MODES = new Set(['off', 'read-only', 'read-write']);
 
 const APP_BELONGS_TO_TARGET =
@@ -282,7 +286,7 @@ export function resolveConfig(
   checkEngineSecrets(targets, secrets, credentials);
   const { agents, agentNames, agent } = resolveAgents(raw.agents, cli.agents);
   const limits = runLimits(agents.values());
-  const cache = resolveCacheConfig(raw, ci, options.projectRoot, cli.cache, cli.cacheStrict === true);
+  const cache = resolveCacheConfig(raw, ci, options.projectRoot, cli.cache, cli.cacheStrict === true, cli.replayOnly === true);
   const output = resolveOutput(raw.output, cli.output, options.projectRoot, cache.dir, tests);
 
   const resolved: ResolvedConfig = {
@@ -345,6 +349,7 @@ function resolveCacheConfig(
   projectRoot: string,
   cliMode: CacheMode | undefined,
   cliStrict: boolean,
+  cliReplayOnly: boolean,
 ): ResolvedCacheConfig {
   const value = raw.cache;
   let mode: CacheMode = 'read-write';
@@ -353,6 +358,7 @@ function resolveCacheConfig(
   let store: CacheStore | undefined;
   let dir: string | undefined;
   let strict = false;
+  let replayOnly = cliReplayOnly;
   if (typeof value === 'string') {
     mode = value;
     explicit = true;
@@ -386,6 +392,12 @@ function resolveCacheConfig(
       }
       dir = value.dir;
     }
+    if (value.replayOnly !== undefined) {
+      if (typeof value.replayOnly !== 'boolean') {
+        throw new ConfigurationError('INVALID_CONFIG', 'cache.replayOnly must be a boolean');
+      }
+      replayOnly ||= value.replayOnly;
+    }
     if (value.strict !== undefined) {
       if (typeof value.strict !== 'boolean') {
         throw new ConfigurationError('INVALID_CONFIG', `cache.strict must be a boolean, got ${JSON.stringify(value.strict)}`);
@@ -400,12 +412,17 @@ function resolveCacheConfig(
     );
   }
   if (cliMode !== undefined) mode = cliMode;
+  if (replayOnly && cliMode === 'off') {
+    throw new ConfigurationError('INVALID_CONFIG', '--replay-only cannot be combined with --no-cache (cache.replayOnly is also incompatible with --no-cache)');
+  }
+  if (replayOnly) mode = 'read-only';
   if (ci && mode === 'read-write' && !explicit && store === undefined) mode = 'read-only';
   return {
     mode,
     store,
     dir: path.resolve(projectRoot, dir ?? path.join('.e2e', 'cache')),
-    strict: strict || cliStrict ? { config: strict, flag: cliStrict } : false,
+    replayOnly,
+    strict: strict || cliStrict || replayOnly ? { config: strict, flag: cliStrict } : false,
   };
 }
 

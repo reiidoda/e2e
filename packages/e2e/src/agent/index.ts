@@ -117,6 +117,9 @@ export function createAgentFixture(runtime: AgentContext): Agent {
       async () => {
         const invocation = new Invocation(runtime, { ...options, label });
         try {
+          if (runtime.config.cache.replayOnly === true) {
+            throw new AgentError('REPLAY_MISSING', `${options.api} has no replayable recording; use deterministic assertions in replay-only mode`);
+          }
           return await body(invocation);
         } catch (cause) {
           throw toAgentError(cause);

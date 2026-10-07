@@ -55,6 +55,7 @@ export const AGENT_CODE_TABLE: Readonly<
   // failure: a retry never replays, so a test-category code would pass live
   // on the retry and read as flaky.
   REPLAY_STALE: { category: 'configuration' },
+  REPLAY_MISSING: { category: 'configuration' },
 };
 
 /** Exit/result class per code; derived from the one table. */
