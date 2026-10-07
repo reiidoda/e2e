@@ -275,8 +275,9 @@ For an app started elsewhere, point `app.url` at it, literally or via
 
 ## Mobile targets
 
-Device-screen video follows the worker's device selection even after
-`device.closeApp()`. Pin `device` when several devices are booted.
+On simulators and emulators, device-screen video follows the worker's device
+selection even after `device.closeApp()`. Physical iOS devices require an open
+app to record. Pin `device` when several devices are booted.
 
 `@e2e-dev/mobile` drives iOS simulators, Android emulators, and connected
 phones through [agent-device](https://github.com/callstack/agent-device);
