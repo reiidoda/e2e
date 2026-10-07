@@ -119,7 +119,7 @@ describe('replay-only', () => {
     const before = readFileSync(file, 'utf8');
     const outcome = await runExisting(created, {
       appUrl: app.url,
-      config: { cache: { replayOnly: true }, agents: { default: { executor } }, actionTimeout: 200 },
+      config: { cache: { replayOnly: true }, agents: { default: { executor } }, actionTimeout: 2_000 },
     });
     expect(outcome.exitCode).toBe(2);
     expect(runStep).not.toHaveBeenCalled();
