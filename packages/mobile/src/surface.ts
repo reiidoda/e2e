@@ -600,6 +600,7 @@ export class AgentDeviceSurface {
       // The whole screen: an app scope refuses to start while no app is open, before `app.open()` and after `closeApp()`.
       (client) =>
         client.recording.record({
+          ...this.selection(),
           action: 'start',
           path: absolute,
           quality: 'medium',

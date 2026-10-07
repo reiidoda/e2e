@@ -1755,6 +1755,7 @@ describe('video', () => {
     expect(records(h)).toHaveLength(0);
     await h.engine.artifacts!.startVideo!(operation());
     expect(h.fake.lastArgs('recording.record')).toEqual({
+      platform: 'ios',
       action: 'start',
       path: path.join(artifactsDir, 'video', 'video.mp4'),
       quality: 'medium',
@@ -1769,12 +1770,35 @@ describe('video', () => {
     expect(records(h)).toHaveLength(2);
   });
 
+  it.each([
+    { platform: 'ios' as const, device: '73329AAC-8EB6-4AAD-B33C-8A8E911CD2A6', selection: { platform: 'ios', udid: '73329AAC-8EB6-4AAD-B33C-8A8E911CD2A6' } },
+    { platform: 'android' as const, device: 'emulator-5554', selection: { platform: 'android', serial: 'emulator-5554' } },
+    { platform: 'ios' as const, device: 'iPhone 17 Pro', selection: { platform: 'ios', device: 'iPhone 17 Pro' } },
+  ])('records on the pinned $platform device after closeApp ends the previous session', async ({ platform, device, selection }) => {
+    const h = harness({ platform, device });
+    recorder(h);
+    await openAttempt(h);
+    await h.surface.closeApp(operation().signal);
+    await h.engine.endAttempt!(cleanup());
+    await h.engine.startAttempt!({ attemptId: 'a2', artifactsDir, signal: operation().signal, resolveSecret: noSecrets, ...ignoreTrace });
+    await h.engine.artifacts!.startVideo!(operation());
+    expect(h.fake.lastArgs('recording.record')).toEqual({
+      ...selection,
+      action: 'start',
+      path: path.join(artifactsDir, 'video', 'video.mp4'),
+      quality: 'medium',
+      recordingScope: 'device',
+    });
+    await h.engine.artifacts!.stopVideo!(operation());
+  });
+
   it('records without the touch indicator when videoTouches is false', async () => {
     const h = harness({ videoTouches: false });
     recorder(h);
     await openAttempt(h);
     await h.engine.artifacts!.startVideo!(operation());
     expect(h.fake.lastArgs('recording.record')).toEqual({
+      platform: 'ios',
       action: 'start',
       path: path.join(artifactsDir, 'video', 'video.mp4'),
       quality: 'medium',

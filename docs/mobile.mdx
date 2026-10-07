@@ -621,6 +621,10 @@ tool.
 | `--video` writes a WebM screencast | `--video` writes an MP4 of the device screen with taps shown (`videoTouches: false` hides them), or keeps a device provider's own recording |
 | The cache anchors on the page path | The cache anchors on the location `<bundle id> / <screen title>`, the title read off the navigation bar on iOS and the toolbar on Android |
 
+Device-screen video uses the worker's selected device, including when the
+previous test called `device.closeApp()`. Pin `device` to a UDID, serial, or
+device name when several simulators or emulators are booted.
+
 ### Known device limitations
 
 - `placeholder` is the only attribute a device node has.
