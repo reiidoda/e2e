@@ -1451,6 +1451,68 @@ describe('device fixture', () => {
     ]);
   });
 
+  it.each([
+    new Error('No active session. Run open first.'),
+    new AppError('SESSION_NOT_FOUND', 'session gone'),
+  ])('binds a session to the selected device when home has none: %s', async (refusal) => {
+    const h = harness({ device: '73329AAC-8EB6-4AAD-B33C-8A8E911CD2A6' });
+    await openAttempt(h);
+    const selection = { platform: 'ios', udid: '73329AAC-8EB6-4AAD-B33C-8A8E911CD2A6' };
+    let refusals = 0;
+    h.fake.respond('command.home', () => {
+      if (refusals++ === 0) throw refusal;
+      return {};
+    });
+    const before = h.fake.calls.length;
+    await fixture(h).home();
+    expect(h.fake.calls.slice(before).map((call) => [call.method, call.args])).toEqual([
+      ['command.home', selection],
+      ['apps.open', selection],
+      ['command.home', selection],
+    ]);
+
+    // Any other refusal propagates without an open.
+    h.fake.respond('command.home', () => {
+      throw new Error('home button press failed');
+    });
+    const other = h.fake.calls.length;
+    await expect(fixture(h).home()).rejects.toMatchObject({ code: 'ENGINE_FAILURE' });
+    expect(h.fake.calls.slice(other).map((call) => call.method)).toEqual(['command.home']);
+  });
+
+  it.each([
+    'iOS appstate requires an active session on the target device. Run open first (for example: open --session sim --platform ios --device "<name>" <app>).',
+    'No foreground app is tracked for this iOS session. Open an app in the session, then retry appstate.',
+    new AppError('SESSION_NOT_FOUND', 'session gone'),
+  ])('says how to name the iOS foreground app when the session has none open: %s', async (refusal) => {
+    const h = harness();
+    await openAttempt(h);
+    h.fake.respond('command.appState', () => {
+      throw typeof refusal === 'string' ? new Error(refusal) : refusal;
+    });
+    const failure = await fixture(h).foregroundApp().catch((error: unknown) => error);
+    expect(failure).toMatchObject({ code: 'INVALID_STATE', message: expect.stringContaining('Open one with app.open() or device.openApp() first') });
+    expect((failure as Error).message).not.toContain('--session');
+  });
+
+  it('refuses app.clearState for an iOS app with no data container and keeps other failures', async () => {
+    const h = harness({ bundleId: 'com.apple.Preferences' });
+    await openAttempt(h);
+    h.fake.respond('settings.update', () => {
+      throw new Error("ENOENT: no such file or directory, scandir '(null)'");
+    });
+    await expect(h.engine.session!.reset!(operation())).rejects.toMatchObject({
+      code: 'UNSUPPORTED_CAPABILITY',
+      message: expect.stringContaining('app.clearState cannot clear "com.apple.Preferences": it has no data container'),
+    });
+    expect(h.fake.methods().at(-1)).toBe('settings.update');
+
+    h.fake.respond('settings.update', () => {
+      throw new Error('simctl failed');
+    });
+    await expect(h.engine.session!.reset!(operation())).rejects.toMatchObject({ code: 'ENGINE_FAILURE' });
+  });
+
   it('opens the app before a permission change when the warmed session is gone, as after a worker retired on a failing test', async () => {
     const h = harness({ device: 'iPhone 16e' });
     await h.prepare({ runId: 'run-1', targetName: 'ios', projectRoot: PROJECT_ROOT, slots: 1, env: {}, signal: new AbortController().signal, headed: false, log: () => undefined });

@@ -44,7 +44,7 @@ import {
   ConfigurationError,
   TestError,
 } from 'e2e/engine';
-import { isNoSessionApp, isSnapshotPresentationFailure, runCommand, staleOr } from './errors.ts';
+import { isNoDataContainer, isNoSession, isNoSessionApp, isNoTrackedApp, isSnapshotPresentationFailure, runCommand, staleOr } from './errors.ts';
 import { pointerInteraction, DEFAULT_LONG_PRESS_MS } from './actions.ts';
 import { resolveExpression } from './locate.ts';
 import {
@@ -1420,12 +1420,58 @@ export class AgentDeviceSurface {
   async reset(operation: OperationContext): Promise<void> {
     const app = this.pinnedApp;
     if (app === undefined) throw unsupported(`app.clearState needs the target's \`app.bundleId\`, or ${UNINSTALLED_BUILD}`);
-    await this.command(
-      'clear app state',
-      (client) => client.settings.update({ ...this.selection(), setting: 'clear-app-state', state: 'clear', app }),
-      operation.signal,
-    );
+    try {
+      await this.command(
+        'clear app state',
+        (client) => client.settings.update({ ...this.selection(), setting: 'clear-app-state', state: 'clear', app }),
+        operation.signal,
+      );
+    } catch (cause) {
+      if (this.options.platform !== 'ios' || !isNoDataContainer(cause)) throw cause;
+      throw unsupported(
+        `app.clearState cannot clear "${app}": it has no data container on this device, as a system app such as Settings has none. Pin your own app's bundleId to clear its state.`,
+      );
+    }
     await this.openApp(app, { relaunch: true }, operation.signal);
+  }
+
+  /**
+   * Sends the device to its home screen. agent-device presses home only
+   * inside a session, and `closeApp()` ended the worker's: an open with no
+   * app binds a new one to the worker's device without launching anything,
+   * and home goes in again.
+   */
+  async home(signal: AbortSignal): Promise<void> {
+    const home = () => this.screenCommand('device.home', (client) => client.command.home(this.selection()), signal);
+    try {
+      await home();
+    } catch (cause) {
+      if (signal.aborted || !isNoSession(cause)) throw cause;
+      await this.command('device.home', (client) => client.apps.open(this.selection()), signal);
+      await home();
+    }
+  }
+
+  /**
+   * The app in the foreground. On iOS agent-device names the app the session
+   * opened and never asks the OS, so with none open, after `closeApp()` or
+   * before any open, there is no answer, and the refusal says how to get one.
+   */
+  async foregroundApp(signal: AbortSignal): Promise<{ name: string; bundleId?: string }> {
+    let state;
+    try {
+      state = await this.command('device.foregroundApp', (client) => client.command.appState(this.selection()), signal);
+    } catch (cause) {
+      if (this.options.platform !== 'ios' || !isNoTrackedApp(cause)) throw cause;
+      throw invalidState(
+        'device.foregroundApp() on iOS names the app this session opened, and none is open: device.closeApp() closes it. Open one with app.open() or device.openApp() first.',
+      );
+    }
+    if ('package' in state) return { name: state.package, bundleId: state.package };
+    return {
+      name: state.appName,
+      ...(state.appBundleId === undefined ? {} : { bundleId: state.appBundleId }),
+    };
   }
 
   /**

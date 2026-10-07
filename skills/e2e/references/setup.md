@@ -281,7 +281,10 @@ app to record. Pin `device` when several devices are booted.
 
 `app.clearState()` and device-management commands also use the worker's
 selected device after `device.closeApp()` ends the session. Commands that
-require an open app still need one.
+require an open app still need one. `device.home()` works after closing the
+app. On iOS, `device.foregroundApp()` needs an app opened in the session;
+Android reads the foreground activity. Clearing an iOS app without a data
+container, such as Settings, reports `UNSUPPORTED_CAPABILITY`.
 
 `@e2e-dev/mobile` drives iOS simulators, Android emulators, and connected
 phones through [agent-device](https://github.com/callstack/agent-device);

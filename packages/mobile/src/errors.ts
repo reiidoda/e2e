@@ -219,6 +219,36 @@ export function isNoSessionApp(error: unknown): boolean {
 }
 
 /**
+ * True for a translated command agent-device refused because the worker has
+ * no session: `closeApp()` ended it, or nothing has opened one yet.
+ */
+export function isNoSession(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  const normalized = normalizeAgentDeviceError(error.cause);
+  return normalized.code === 'SESSION_NOT_FOUND' || NO_SESSION_PATTERN.test(normalized.message);
+}
+
+/** agent-device's iOS `appstate` in a session that opened no app: it names the session's app and never asks the OS. */
+const NO_TRACKED_APP_PATTERN = /no foreground app is tracked/i;
+
+/** True for a translated iOS `appstate` with no app of the session to name. */
+export function isNoTrackedApp(error: unknown): boolean {
+  return error instanceof Error && (isNoSession(error) || NO_TRACKED_APP_PATTERN.test(normalizeAgentDeviceError(error.cause).message));
+}
+
+/**
+ * simctl's answer for the data container of an app without one, a system
+ * app such as Settings, which agent-device then lists as the path `(null)`.
+ * See https://github.com/callstack/agent-device/issues/3305.
+ */
+const NO_DATA_CONTAINER_PATTERN = /\bENOENT\b.*'\(null\)'/;
+
+/** True for a translated iOS state clear of an app with no data container. */
+export function isNoDataContainer(error: unknown): boolean {
+  return error instanceof Error && NO_DATA_CONTAINER_PATTERN.test(normalizeAgentDeviceError(error.cause).message);
+}
+
+/**
  * True for a translated snapshot the iOS runner acquired but could not
  * present. The check is per capture and the capture is a read, so one retry
  * is safe and usually enough.
