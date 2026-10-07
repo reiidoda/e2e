@@ -306,7 +306,6 @@ export function createAgentCacheContext(options: {
  */
 function staleAdvice(cache: ResolvedCacheConfig, source: CacheStrictSource, projectRoot: string): string {
   const off = [
-    ...(cache.replayOnly === true ? ['without --replay-only and with cache.replayOnly set to false'] : []),
     ...(source.flag ? ['without --strict-cache'] : []),
     ...(source.config ? ['with cache.strict set to false'] : []),
   ].join(' and ');

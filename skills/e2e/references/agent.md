@@ -281,7 +281,8 @@ matches. Misses and hand-offs use the model; `agent.assert`,
   live.
 
 - For a gate with zero model calls, set `cache: { replayOnly: true }` or
-  pass `--replay-only`. It implies strict and read-only and replays on retries.
+  pass `--replay-only`. This applies to `e2e run`; Explore and MCP sessions
+  do not use the replay cache. It implies strict and read-only and replays on retries.
   Missing, stale, incomplete, or unavailable recordings fail with
   `REPLAY_MISSING`, exit 2, without invoking an executor or resolving a model.
   Entries are never written or evicted. `agent.assert`, `agent.waitFor`, and

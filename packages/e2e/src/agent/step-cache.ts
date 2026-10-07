@@ -146,6 +146,10 @@ const END_WAIT_MARGIN_MS = 10_000;
 const END_PATH_DELAYS_MS = [100, 300, 600, 1_000, 3_000] as const;
 const END_PATH_TIMEOUT_MS = 15_000;
 
+/** How to re-record under replay-only, as `REPLAY_MISSING` in the error reference says. */
+const RE_RECORD_ADVICE =
+  "to re-record, run with cache.mode 'read-write', cache.replayOnly and cache.strict set to false, and neither --replay-only nor --strict-cache";
+
 export class StepTraceSession {
   private readonly host: StepCacheHost;
   private readonly cache: AgentCacheContext;
@@ -271,9 +275,11 @@ export class StepTraceSession {
   /** Refuses every hand-off in replay-only mode, including missing or unreadable entries. */
   private failIfReplayOnly(): void {
     if (this.cache.replayOnly !== true) return;
+    const reason = this.info?.reason ?? 'no-entry';
+    const what = reason === 'no-entry' ? 'this step has no recording to replay' : `the recording of this step does not replay (${reason})`;
     throw new AgentError(
       'REPLAY_MISSING',
-      `this step has no replayable recording (${this.info?.reason ?? 'no-entry'}); disable cache.replayOnly and --replay-only to re-record with a read-write run`,
+      `${what}, and replay-only mode never hands a step to the agent; ${RE_RECORD_ADVICE}`,
     );
   }
 

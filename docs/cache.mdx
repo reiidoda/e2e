@@ -293,7 +293,8 @@ drifting UI is repaired only once a control can no longer be found.
 ## Replay-only runs
 
 Set `cache: { replayOnly: true }` or pass `--replay-only` to gate a run on
-its recorded `agent.act()` steps with zero model calls:
+its recorded `agent.act()` steps with zero model calls. This applies to
+`e2e run`; `e2e explore` and `e2e mcp` do not use the replay cache:
 
 <CodeGroup>
 ```bash npm
