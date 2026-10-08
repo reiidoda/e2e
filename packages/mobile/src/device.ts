@@ -109,7 +109,7 @@ export interface Device {
    * once `closeApp` ended the session.
    */
   foregroundApp(): Promise<ForegroundApp>;
-  /** Sends the device to its home screen, also after `closeApp` ended the session. */
+  /** Sends the device to its home screen. */
   home(): Promise<void>;
   /** Navigates back once (in-app back). */
   back(): Promise<void>;
@@ -214,10 +214,15 @@ export function createDeviceFixture(surface: AgentDeviceSurface, context: Engine
       await surface.clearKeychain(context.signal);
     },
     async foregroundApp() {
-      return surface.foregroundApp(context.signal);
+      const state = await surface.command('device.foregroundApp', (client) => client.command.appState(surface.selection()), context.signal);
+      if ('package' in state) return { name: state.package, bundleId: state.package };
+      return {
+        name: state.appName,
+        ...(state.appBundleId === undefined ? {} : { bundleId: state.appBundleId }),
+      };
     },
     async home() {
-      await surface.home(context.signal);
+      await surface.screenCommand('device.home', (client) => client.command.home(surface.selection()), context.signal);
     },
     async back() {
       await surface.screenCommand('device.back', (client) => client.command.back({ ...surface.settleOptions }), context.signal);

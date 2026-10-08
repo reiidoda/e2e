@@ -316,7 +316,7 @@ export interface Device {
    * once `closeApp` ended the session.
    */
   foregroundApp(): Promise<ForegroundApp>;
-  /** Sends the device to its home screen, also after `closeApp` ended the session. */
+  /** Sends the device to its home screen. */
   home(): Promise<void>;
   /** Navigates back once (in-app back). */
   back(): Promise<void>;
