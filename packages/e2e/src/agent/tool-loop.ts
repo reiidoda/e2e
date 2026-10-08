@@ -15,7 +15,7 @@ import type { StepTurn } from '../run/steps.ts';
 import type { AssistantModelMessage, ModelMessage, StepResult, ToolCallPart, ToolSet } from 'ai';
 import { asSdkLanguageModel, loadAiSdk, type AiSdk, type SdkLanguageModel } from './ai-sdk.ts';
 import { MODEL_REQUEST_HEADERS } from '../internal/client-identity.ts';
-import { ConfigurationError, withHint } from '../internal/errors.ts';
+import { ConfigurationError, providerFailureMessage, withHint } from '../internal/errors.ts';
 import type { ProviderOptions } from '../types.ts';
 import { failureHint, isAbort, TRANSPORT_RETRIES } from './model/sdk.ts';
 import { isContextOverflow } from './model/overflow.ts';
@@ -330,7 +330,7 @@ class LoopRun {
         if (isAbort(cause)) {
           throw new AgentError('STEP_TIMEOUT', 'model call exceeded the remaining step timeout', { cause });
         }
-        const message = cause instanceof Error ? cause.message : String(cause);
+        const message = providerFailureMessage(cause);
         if (isContextOverflow(cause)) {
           throw new AgentError(
             'CONTEXT_OVERFLOW',

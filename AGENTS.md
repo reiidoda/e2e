@@ -416,9 +416,11 @@ trees, on both platforms, without a device.
   field): strict lists the file store and fails a step whose
   key misses while an entry recorded for the same step sits under another key
   (`cache/rekeyed.ts`). Only entries whose `recordedFor` names the whole step
-  (params digest, occurrence, agent) count; a `read-write` replay completes
-  an older one. Such a change re-records every entry and deletes the old ones
-  in the same pull request. A step that was never recorded still runs live.
+  (params digest, occurrence, agent) count; a lenient `read-write` replay
+  completes an older one. Such a change re-records every entry and deletes the
+  old ones in the same pull request. A step that was never recorded still runs
+  live. A strict run replays on retries too and never writes or deletes an
+  entry, whatever the mode.
   The web benchmark's entries are in. The mobile benchmark's iOS entries are
   recorded on a Mac; nobody has recorded on an Android emulator yet, so the
   Android side spends model calls until an emulator recording is committed.

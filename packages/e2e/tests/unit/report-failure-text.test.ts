@@ -227,6 +227,11 @@ describe('renderTracePage', () => {
     expect(hook).toContain('**ASSERTION_FAILED** in afterEach');
     expect(hook).toContain("cleanup '''broke'''");
   });
+
+  it('names the skip a failed attempt took before its soft failures were settled', () => {
+    expect(page([failed({ skip: { cause: 'explicit', reason: 'flag | off' } })])).toContain('Also skipped: flag \\| off  ');
+    expect(page([failed()])).not.toContain('Also skipped');
+  });
 });
 
 describe('a serial member on its page', () => {

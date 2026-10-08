@@ -127,6 +127,26 @@ selected option's share of the answer distribution, confidence is the
 provider's separate statistic. A threshold is a policy choice; measure
 accuracy on your own tests before changing it.
 
+## Provider options
+
+`providerOptions` go with every decide call, the completion checks
+included. Use them for options of the decision model's provider, such as
+zero data retention on Vercel AI Gateway:
+
+```ts title="Executor setup"
+import { gateway } from 'ai';
+
+const executor = decisionExecutor({
+  model: gateway.decisionModel('typesafe-ai/jev'),
+  textModel: gateway('openai/gpt-4.1-nano'),
+  providerOptions: { gateway: { zeroDataRetention: true } },
+});
+```
+
+They reach the decision model only. The text model takes the agents
+entry's `providerOptions`, so a gateway setting meant for one model, such as
+a fallback list, never reaches the other.
+
 ## Limits
 
 - No vision: screenshots never reach the model; canvas-only controls and

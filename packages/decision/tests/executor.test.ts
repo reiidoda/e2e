@@ -48,6 +48,16 @@ describe('construction', () => {
       expect(decisionExecutor({ model }).name).toBe('decision');
     }
   });
+  it.each([
+    ['an array', []],
+    ['a string', 'gateway'],
+    ['a provider mapped to a non-object', { gateway: true }],
+    ['a class instance', new Date()],
+    ['a provider mapped to a class instance', { gateway: new Date() }],
+  ])('rejects providerOptions that are %s', (_name, providerOptions) => {
+    const { model } = scriptedDecision(() => ({ choice: 'done' }));
+    expect(() => decisionExecutor({ model, providerOptions: providerOptions as never })).toThrow(invalidConfig('maps provider names to option objects'));
+  });
   it('exposes the text model and replays cache', () => {
     const { model } = scriptedDecision(() => ({ choice: 'done' }));
     const text = scriptedText([]);
@@ -76,6 +86,20 @@ describe('act loop', () => {
     expect(fixture.usage[0]).toMatchObject({ provider: 'scripted', modelId: 'scripted-1' });
     expect(fixture.turns.length).toBeGreaterThan(0);
     expect(fixture.transcripts).toHaveLength(1);
+  });
+  it('sends providerOptions with every decide call, and none when unset', async () => {
+    const script = (id: string, keys: string[], call: number) =>
+      id === 'operation' ? { choice: call === 0 ? 'tap' : 'done' } : id === 'verdict' ? { choice: 'holds' } : { choice: keys[0] ?? '' };
+    const providerOptions = { gateway: { zeroDataRetention: true } };
+    const withOptions = scriptedDecision(script);
+    const fixture = context({ tree: BUTTONS });
+    expect(await decisionExecutor({ model: withOptions.model, providerOptions }).runStep(fixture.ctx)).toMatchObject({ status: 'passed' });
+    expect(withOptions.requests).toHaveLength(3);
+    for (const request of withOptions.requests) expect(request.providerOptions).toEqual(providerOptions);
+    const without = scriptedDecision(script);
+    expect(await decisionExecutor({ model: without.model }).runStep(context({ tree: BUTTONS }).ctx)).toMatchObject({ status: 'passed' });
+    // The SDK sends an empty object when the caller passes none.
+    for (const request of without.requests) expect(request.providerOptions ?? {}).toEqual({});
   });
   it('runs a deprecated evaluation model through the same loop', async () => {
     const { model, requests } = scriptedDecision((id, keys, call) => {

@@ -14,6 +14,8 @@ export interface ScriptedAnswer {
 export interface EvalRequest {
   readonly state: unknown;
   readonly questions: Record<string, { type: string; criteria: unknown }>;
+  /** Present only when the executor sent provider options. */
+  readonly providerOptions?: unknown;
 }
 /** The model shapes the executor accepts: a decision model, or a deprecated evaluation model. */
 type AcceptedModel = DecisionExecutorOptions['model'];
@@ -46,7 +48,7 @@ export function scriptedDecision(resolve: (id: string, keys: string[], call: num
       }
       if (answer.confidence !== undefined) confidence[id] = answer.confidence;
     }
-    requests.push({ state: call.state, questions });
+    requests.push({ state: call.state, questions, ...(call.providerOptions === undefined ? {} : { providerOptions: call.providerOptions }) });
     return { answers, warnings: [], usage: { inputTokens: 10, outputTokens: 0 }, providerMetadata: { scripted: { confidence } }, response: { modelId: 'scripted-1' } };
   };
   const base = {

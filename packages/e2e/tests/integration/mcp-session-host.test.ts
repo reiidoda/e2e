@@ -483,6 +483,34 @@ describe('SessionHost', { timeout: 60_000 }, () => {
     expect(closed).not.toContain('Recording');
   });
 
+  it('counts a cancelled queued request as a received call with an error result', async () => {
+    const started = gate();
+    const released = gate();
+    const summaries: McpSessionSummary[] = [];
+    let mutated = false;
+    const counted = host(engines().next, { onSessionEnd: (summary) => summaries.push(summary), tools: {
+      hold: defineTool({ description: 'Hold the session queue.', inputSchema: z.object({}), execute: async () => { started.open(); await released.promise; return 'released'; } }, { mutates: false }),
+      mutate: defineTool({ description: 'Mark a mutation.', inputSchema: z.object({}), execute: async () => { mutated = true; return 'mutated'; } }, { mutates: true }),
+    } });
+    const id = sessionId(await counted.open({}));
+    const first = counted.call(id, 'hold', {}, { signal: new AbortController().signal });
+    try {
+      await started.promise;
+      const cancelled = new AbortController();
+      const second = counted.call(id, 'mutate', {}, { signal: cancelled.signal });
+      cancelled.abort();
+      released.open();
+      await first;
+      expect((await second).isError).toBe(true);
+      expect(mutated).toBe(false);
+    } finally {
+      released.open();
+      await first.catch(() => undefined);
+      await counted.close('done', id);
+    }
+    expect(summaries[0]).toMatchObject({ projectToolCalls: 2, failedCalls: 1, errorCodes: new Map([['CANCELLED', 1]]) });
+  });
+
   it('reports one summary per open: its calls by tool, its failures by code, and how it ended', async () => {
     const summaries: McpSessionSummary[] = [];
     const counted = host(engines().next, { idleMs: 300, onSessionEnd: (summary) => summaries.push(summary) });

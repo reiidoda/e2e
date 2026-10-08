@@ -85,7 +85,8 @@ export interface PollConditionOptions {
 /**
  * Polls a condition until it holds (or, when negated, until its negation has
  * held continuously for the negation grace window), throwing the caller's
- * error at the deadline.
+ * error at the deadline. No sleep runs past the deadline, so the last read
+ * starts at it and never sees a state that arrived later.
  *
  * A negation holds from the moment the read that first saw it was issued, so
  * a slow read counts toward the window. A budget shorter than the window
@@ -125,7 +126,7 @@ export async function pollCondition(options: PollConditionOptions): Promise<void
     const now = Date.now();
     if (holds(now)) return;
     if (deadline.expired(now)) throw await options.onTimeout();
-    await sleep(negated ? Math.min(POLL_INTERVAL_MS, deadline.remaining(now)) : POLL_INTERVAL_MS, options.signal);
+    await sleep(Math.min(POLL_INTERVAL_MS, deadline.remaining(now)), options.signal);
     readAt = Date.now();
     if (negated && deadline.expired(readAt)) {
       if (holds(readAt)) return;

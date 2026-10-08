@@ -107,12 +107,6 @@ type EntryRead =
 type StartPurpose = 'path-only' | 'baseline' | 'replay-start';
 
 /**
- * The reasons a recording that exists no longer replays: the app or the
- * entry changed under it. The others describe the step (a value read off
- * the screen, a flow too long to record), the attempt (a retry), or the
- * absence of a recording, and run live under `cache.strict` too.
- */
-/**
  * What staging a passed step's recording came to: `staged` for attempt-end
  * settlement, `no-change` when the step changed nothing a replay could check,
  * or `skipped` for any other reason it could not be recorded (no semantic
@@ -123,6 +117,12 @@ type StageOutcome = 'staged' | 'no-change' | 'skipped';
 /** Characters of a step's cache detail the report admits. */
 const MAX_CACHE_DETAIL_CHARS = 600;
 
+/**
+ * The reasons a recording that exists no longer replays: the app or the
+ * entry changed under it. The others describe the step (a value read off
+ * the screen, a flow too long to record) or the absence of a recording, and
+ * run live under `cache.strict` too.
+ */
 const STALE_REASONS: ReadonlySet<StepCacheInfo['reason']> = new Set<StepCacheInfo['reason']>([
   'invalid-entry',
   'wrong-context',
@@ -163,6 +163,10 @@ export class StepTraceSession {
   private prefix: ReplayedPrefix | undefined;
   private startPath: string | undefined;
   private startedMs = Date.now();
+  /** When the replay handed the step to the executor, if it did. */
+  private handedOffMs: number | undefined;
+  /** When the executor finished; its turn is not app settling time. */
+  private executorCompletedMs: number | undefined;
   /**
    * The screen before any action, captured only when this step may write: the
    * staged trace's end anchors are the delta between this and the passing
@@ -184,8 +188,6 @@ export class StepTraceSession {
   private consumedReplay = false;
   /** True once the store returned an entry for this step, whether or not it replayed. */
   private readEntryHit = false;
-  /** True once `cache.strict` failed the step on its recording, which is then kept for review rather than evicted. */
-  private failedStale = false;
   /** Grammar actions recorded so far when an end-mismatch hand-off happened. */
   private actionsAtEndMismatch: number | undefined;
 
@@ -243,8 +245,8 @@ export class StepTraceSession {
    */
   async begin(): Promise<StepVerdict | undefined> {
     this.startedMs = Date.now();
-    // A retry records like any step but never replays; the report says so
-    // instead of looking like a step that ran with caching off.
+    // Outside `cache.strict`, a retry records like any step but never replays;
+    // the report says so instead of looking like a step that ran with caching off.
     const read: EntryRead = this.cache.replayEligible
       ? await this.readEntry()
       : { status: 'miss', reason: 'retry' };
@@ -303,7 +305,6 @@ export class StepTraceSession {
     const reason = this.info?.reason;
     const { strict } = this.cache;
     if (strict === false || !STALE_REASONS.has(reason)) return;
-    this.failedStale = true;
     throw new AgentError(
       'REPLAY_STALE',
       `the recording of this step no longer replays (${reason}), and cache.strict hands no step to the agent; ${strict.advice}`,
@@ -322,7 +323,6 @@ export class StepTraceSession {
     if (strict === false || strict.recordings === undefined) return;
     const previous = await strict.recordings.underAnotherKey(this.keyHash, recordedProvenance(this.claim.step, this.options.redact));
     if (previous === undefined) return;
-    this.failedStale = true;
     const changes = keyContextChanges(previous.keyedBy, this.claim.context);
     const why = changes.length === 0 ? "the runner, the engine, the app, or the agent's context changed after it was recorded" : `${changes.join(', ')} changed after it was recorded`;
     throw new AgentError(
@@ -366,14 +366,12 @@ export class StepTraceSession {
   async conclude(outcome: StepOutcome, verdictSummary: string | undefined): Promise<void> {
     const recorder = this.recorder;
     if (recorder === undefined) return;
+    if (this.handedOffMs !== undefined) this.executorCompletedMs = Date.now();
     switch (outcome) {
       case 'no-verdict':
         return;
       case 'failed':
-        // A stale recording `cache.strict` failed on stays for the next strict
-        // run to fail on too, until a lenient run re-records it; evicting it
-        // would turn it into a `no-entry` that runs live.
-        if (this.consumedReplay && !this.failedStale) await this.evict();
+        if (this.consumedReplay) await this.evict();
         return;
       case 'passed':
         if (this.repairedAfterEndMismatch(recorder)) await this.evict();
@@ -567,6 +565,7 @@ export class StepTraceSession {
   }
 
   private handOff(outcome: ReplayOutcome, stopReason: HandOffReason, detail: string | undefined): void {
+    this.handedOffMs = Date.now();
     if (stopReason === 'end-mismatch') this.actionsAtEndMismatch = this.recorder?.recordedCount ?? 0;
     this.prefix = {
       replayedActions: outcome.summaries,
@@ -583,6 +582,13 @@ export class StepTraceSession {
       entry: this.keyHash,
       ...(detail === undefined ? {} : { detail: this.reportable(detail) }),
     };
+  }
+
+  /** Returns the app-settling baseline: the executor's verdict or, if it acted, its last action. */
+  private endWaitBaselineMs(recorder: TraceRecorder): number {
+    const lastActionAtMs = recorder.lastActionAtMs ?? this.startedMs;
+    if (this.handedOffMs === undefined || (recorder.lastActionAtMs ?? 0) > this.handedOffMs) return lastActionAtMs;
+    return this.executorCompletedMs ?? this.handedOffMs;
   }
 
   /**
@@ -627,8 +633,10 @@ export class StepTraceSession {
       // plus room for a slower day: the budget a replay waits for the anchors
       // to return. Measured from the last action, not the step's start: the
       // model's thinking time before that action is no reason for a replay,
-      // which does not think, to wait.
-      endWaitMs: Date.now() - (recorder.lastActionAtMs ?? this.startedMs) + END_WAIT_MARGIN_MS,
+      // which does not think, to wait. After a hand-off, the executor's last
+      // action is the baseline when it acted; otherwise its completion is the
+      // baseline. The replay and executor turn are not app settling time.
+      endWaitMs: Date.now() - this.endWaitBaselineMs(recorder) + END_WAIT_MARGIN_MS,
       keyedBy: this.claim.context,
     });
     if (trace === undefined) return 'skipped';

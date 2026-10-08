@@ -480,6 +480,7 @@ export function renderTracePage(report: Report1Document, result: ReportResult, f
     lines.push(`_${STATUS_WORD[result.status]}: no error was recorded._`);
   }
   if (result.status !== 'passed') lines.push(`Look at: ${sourceText(failureSource(result, told), options.sourceUrl)}  `);
+  if (told.status !== 'skipped' && told.skip !== undefined) lines.push(`Also skipped: ${cell(told.skip.reason)}  `);
   const attempts = attemptsLine(result, final);
   if (attempts !== undefined) lines.push(`${attempts}  `);
   if (result.status === 'flaky') lines.push(`Passed after ${plural(final.failedAttempts, 'failed attempt')}; this page tells the last failure.  `);

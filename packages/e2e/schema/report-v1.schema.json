@@ -404,8 +404,11 @@
       "allOf": [
         {
           "if": { "properties": { "status": { "const": "skipped" } } },
-          "then": { "required": ["skip"] },
-          "else": { "properties": { "skip": false } }
+          "then": { "required": ["skip"] }
+        },
+        {
+          "if": { "properties": { "status": { "const": "passed" } } },
+          "then": { "properties": { "skip": false } }
         }
       ]
     },
@@ -451,8 +454,8 @@
           }
         },
         {
-          "if": { "properties": { "status": { "const": "skipped" } } },
-          "else": { "properties": { "skip": false } }
+          "if": { "properties": { "status": { "const": "passed" } } },
+          "then": { "properties": { "skip": false } }
         }
       ]
     },

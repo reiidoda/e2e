@@ -467,11 +467,9 @@ attempt's error records.
 
 When the body throws on its own, or times out, that error stays the
 attempt's verdict and the soft failures are recorded beside it under
-`secondaryErrors`. A body that skips itself with `test.skip(...)` keeps them
-there too. The CLI shows `Skipped After Failure`; set
-[`failOnSkippedFailure: true`](/reference/config) to make that run fail with
-exit code 1. Without that option, the test stays skipped and does not affect
-the exit code.
+`secondaryErrors`. A body that skips itself with `test.skip(...)` after a
+soft failure still fails: the soft failures are the attempt's error, and the
+skip reason is kept in the attempt's `skip`.
 
 A soft `toMatchSchema` returns the schema's output when the value matches
 and `undefined` after a kept failure, and its type says so.

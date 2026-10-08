@@ -31,6 +31,9 @@ single target dispatch without a question. The text model is also the agent's
 judgment tier (`waitFor`, `extract`); without a text model or a configured agent
 `model`, `type` is never offered.
 
+`providerOptions` go with every decide call and reach the decision model
+only; the text model keeps the agents entry's `providerOptions`.
+
 The runner authorizes every dispatched action and records every model call
 against the step budget. Secrets stay declared handles filled only through
 `typeSecret`; password fields never reach the text model. `minProbability`

@@ -115,6 +115,8 @@ interface ResultDetails {
   readonly screenPath: string | undefined;
   /** What the app logged during the told attempt, as `2 errors, 1 warning`; undefined for nothing. */
   readonly appLog: string | undefined;
+  /** Why the told attempt skipped itself, when it failed anyway. */
+  readonly skipReason: string | undefined;
 }
 
 /** `2 errors, 1 warning`: the app log lines that say something went wrong. */
@@ -142,6 +144,7 @@ function attemptDetails(attempts: readonly AttemptRecord[]): ResultDetails {
     videos: videoPaths(attempts),
     ...failureOf(told),
     appLog: appLogTally(told?.appLog ?? []),
+    skipReason: told?.status === 'skipped' ? undefined : told?.skip?.reason,
   };
 }
 
@@ -193,6 +196,7 @@ function serialMemberDetails(group: SerialGroupRecord, testId: string): ResultDe
     videos: videoPaths(group.attempts),
     ...failureOf(own === undefined ? undefined : { failure: own.failure, artifacts: last?.attempt.artifacts ?? [] }),
     appLog: appLogTally(own?.appLog ?? []),
+    skipReason: neverRan ? undefined : own.skip?.reason,
   };
 }
 
@@ -209,6 +213,8 @@ interface Failure {
   readonly failure: FailureEvidence | undefined;
   readonly screenPath: string | undefined;
   readonly appLog: string | undefined;
+  /** Why a failed test skipped itself: the skip did not outrank the failure. */
+  readonly skipReason?: string | undefined;
 }
 
 const DEFAULT_OUTPUT: ListReporterOutput = {
@@ -694,7 +700,7 @@ export class ListReporter implements Reporter {
     // Read before `detailsOf` releases the result's serial group.
     const skippedAfter = failureBeforeSkip(result, (id) => this.pendingSerial.get(id)?.group);
     const id = resultId(result.test.id, result.target.name, result.agent, result.repeat);
-    const { durationMs, usage, models, cache, error, videos, failure, screenPath, appLog } = this.detailsOf(result);
+    const { durationMs, usage, models, cache, error, videos, failure, screenPath, appLog, skipReason } = this.detailsOf(result);
     addUsage(this.runUsage, usage);
     addModelTally(this.runModels, models);
     addCacheTally(this.runCache, cache);
@@ -726,7 +732,7 @@ export class ListReporter implements Reporter {
       run: { repeat: result.repeat, status: result.status, code: error?.code ?? result.attempts.findLast((attempt) => attempt.status !== 'passed')?.error?.code },
     });
     if (statusBucket(result.status) === 'failed') {
-      this.failures.push({ id, group, title, status: result.status, error, videos, failure, screenPath, appLog });
+      this.failures.push({ id, group, title, status: result.status, error, videos, failure, screenPath, appLog, skipReason });
     }
     if (skippedAfter !== undefined) {
       this.skippedFailures.push({ id, group, title, status: result.status, error: skippedAfter.error, videos, ...failureOf(skippedAfter), appLog: undefined });
@@ -968,7 +974,7 @@ export class ListReporter implements Reporter {
     this.print('');
     this.print(this.errorBanner(`${heading} ${failures.length}`));
     this.print('');
-    failures.forEach(({ id, group, title, status, error, videos, failure, screenPath, appLog }, index) => {
+    failures.forEach(({ id, group, title, status, error, videos, failure, screenPath, appLog, skipReason }, index) => {
       this.print(
         `${pc.bold(pc.bgRed(status === 'skipped' ? ' SKIP ' : ' FAIL '))} ${this.badge(group.target)} ${bounded(group.file)}${this.separator}${title}`,
       );
@@ -980,6 +986,7 @@ export class ListReporter implements Reporter {
         for (const line of rest) this.print(pc.red(line));
         this.printFailureLocation(error.stack);
       }
+      if (skipReason !== undefined) this.print(pc.yellow(` ${pc.dim(F_POINTER)} ${pc.dim('skipped')} ${bounded(skipReason)}`));
       this.printEvidence(failure, screenPath, pages[id], appLog);
       this.printVideos(videos);
       const marker = `[${index + 1}/${failures.length}]`;

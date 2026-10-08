@@ -1078,12 +1078,12 @@ export class TargetExecutor implements SerialHost {
           await (registered.fn as SetupFn)(fixtures);
         } catch (cause) {
           // The body's own failure stays the verdict; the step it abandoned
-          // and the soft failures it kept are noted beside it. A skip keeps
-          // only the soft failures: a step or poll it left running is not one.
+          // and the soft failures it kept are noted beside it. A skip leaves
+          // its soft failures to be settled after the race, and a step or
+          // poll it left running is not one.
           const notAwaited = await abandonNotAwaited();
-          const softFailure = soft.close();
-          const kept = isRuntimeSkip(cause) ? [softFailure] : [...notAwaited, softFailure];
-          for (const secondary of kept) {
+          if (isRuntimeSkip(cause)) throw cause;
+          for (const secondary of [...notAwaited, soft.close()]) {
             if (secondary !== undefined) {
               secondaryErrors.push(serializeError(secondary, { phase: 'body', projectRoot: this.config.projectRoot, redact }));
             }
@@ -1153,12 +1153,15 @@ export class TargetExecutor implements SerialHost {
       // the next turn of the event loop; waiting that turn out lands it on
       // this attempt instead of between two.
       await new Promise<void>((resolve) => setImmediate(resolve));
-      // A body that timed out or was interrupted never closed its soft
-      // failures; they are noted here so teardown starts with the collection
-      // closed either way, and a soft matcher in a hook throws.
+      // A body that skipped itself, timed out, or was interrupted never
+      // closed its soft failures; they are settled here so teardown starts
+      // with the collection closed either way, and a soft matcher in a hook
+      // throws. A soft failure is sticky: it fails an attempt that then
+      // skipped, and sits beside a timeout or interrupt that came first.
       const lateSoft = soft.close();
       if (lateSoft !== undefined) {
-        secondaryErrors.push(serializeError(lateSoft, { phase: 'body', projectRoot: this.config.projectRoot, redact }));
+        recordFailure(lateSoft, 'body');
+        await captureEvidence();
       }
       // A callback the surface ran for the body (a request interceptor, a
       // dialog handler) fails on a path no step awaits; one that failed after
@@ -1215,6 +1218,8 @@ export class TargetExecutor implements SerialHost {
       } else {
         record.status = classifyAttemptStatus(failure, timedOut, this.interruptSignal.aborted);
         record.error = serializeError(failure, { phase: failurePhase ?? phase, projectRoot: this.config.projectRoot, redact });
+        // A failure outranks the skip; the reason stays beside it.
+        if (skipped !== undefined) record.skip = { cause: 'explicit', reason: skipped.reason };
         // A failure that first landed in teardown has had no look yet.
         await captureEvidence();
       }

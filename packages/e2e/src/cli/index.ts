@@ -543,7 +543,7 @@ function createProgram(version: string, telemetry: Telemetry): Command {
     .option('--repeat-each <n>', 'run every selected test this many times, each run its own result (pair with --no-cache to exercise the model each time)', parsePositiveInt)
     .option('--no-cache', 'run with the replay cache off, whatever the config says')
     .option('--replay-only', 'replay recordings only; fail missing or non-replayable agent steps without calling a model')
-    .option('--strict-cache', 'fail a step whose recording no longer replays (REPLAY_STALE) instead of handing it to the agent')
+    .option('--strict-cache', 'fail a step whose recording no longer replays (REPLAY_STALE) instead of handing it to the agent; never writes the cache')
     .optionsGroup('Output:')
     .option('--reporter <ids>', `comma-separated reporters: ${BUILTIN_REPORTERS.join(', ')}`, parseReporters)
     .option('--output <dir>', 'results directory: report, artifacts, sessions (default: output in the config, else .e2e)')

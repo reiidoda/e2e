@@ -683,6 +683,73 @@ html.dark body .code-block-fade-overlay {
   }
 }
 
+/* Long content folded like the setup prompt (snippets/show-more.jsx). */
+#content .show-more {
+  margin-block: 1.25rem;
+  border: 1px solid var(--e2e-hairline);
+}
+
+#content .show-more-content {
+  max-height: 132px;
+  padding: 1rem 1rem 0;
+  overflow: hidden;
+  mask-image: linear-gradient(to bottom, black 45%, transparent);
+
+  & > :first-child {
+    margin-top: 0;
+  }
+
+  & > :last-child {
+    margin-bottom: 0;
+  }
+}
+
+#content .show-more[data-expanded='true'] .show-more-content {
+  max-height: none;
+  mask-image: none;
+}
+
+#content .show-more-toggle {
+  display: block;
+  width: 100%;
+  padding: 0.5rem 1rem 0.75rem;
+  color: var(--e2e-muted);
+  font-size: 0.8125rem;
+  text-align: center;
+  cursor: pointer;
+}
+
+#content .show-more-toggle:hover {
+  color: var(--e2e-ink);
+}
+
+#content .show-more-toggle:focus-visible {
+  outline: 2px solid var(--e2e-ink);
+  outline-offset: -2px;
+}
+
+/* A video in a hairline frame with its caption underneath. */
+#content .video-figure {
+  margin-block: 1.25rem;
+
+  & video {
+    display: block;
+    width: 100%;
+    margin: 0;
+    border: 1px solid var(--e2e-hairline);
+    border-radius: 0;
+  }
+
+  /* The caption is whatever follows the <video> in the page's MDX. */
+  & > :not(video) {
+    display: block;
+    margin: 0.5rem 0 0;
+    color: var(--e2e-muted);
+    font-size: 0.8125rem;
+    line-height: 1.5;
+  }
+}
+
 /* The "Copy page" menu shows titles only. docs.json requires a description on
    every custom option and Mintlify renders one under each title, so the second
    line is hidden here, on the built-in items too. The menu has no id; the
@@ -719,6 +786,11 @@ html.dark body .code-block-fade-overlay {
    square and reads on both. */
 .dark img[src*='/images/integrations/expo.svg'] {
   filter: invert(1);
+}
+
+/* The Bitrise purple is too dark on the dark background. Make it lighter. */
+.dark img[src*='/images/integrations/bitrise.svg'] {
+  filter: brightness(2.2);
 }
 
 /* The Next.js wordmark needs the same contrast in dark mode. */

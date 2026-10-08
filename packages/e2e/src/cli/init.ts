@@ -205,9 +205,13 @@ export async function init(cwd: string, options: InitOptions = {}): Promise<Init
   );
   if (isCancelled(mcpFiles)) return cancel();
   facts.mcp = mcpFiles.length > 0;
-  let mcpRegistrations: ReturnType<typeof planMcpRegistration>;
+  let mcpRegistrations: ReturnType<typeof planMcpRegistration>['registrations'];
   try {
-    mcpRegistrations = planMcpRegistration(cwd, mcpFiles);
+    const plan = planMcpRegistration(cwd, mcpFiles);
+    mcpRegistrations = plan.registrations;
+    for (const link of plan.links) {
+      clack.log.warn(`Symlink, not touching: ${link.relative} -> ${link.target} (e2e mcp server)`);
+    }
   } catch (cause) {
     clack.log.error(cause instanceof Error ? cause.message : String(cause));
     return done('invalid-project', 2);

@@ -164,7 +164,7 @@ what to do today.
 | `pressSequentially(text, { delay })` | the same; keystrokes through the platform keyboard, a `Secret` is refused | same |
 | `press(key)` | the same; modifiers join with `+`, see the [key grammar](/reference/engine#keys) | same |
 | `clear()`, `focus()`, `hover()`, `setInputFiles()`, `dragTo()` | the same | same |
-| `check()`, `uncheck()` | the same, except for a control the click removes or navigates away from, such as a radio the app replaces with its selected view: the click landed, so the action passes, even when the app renders an unchecked control in its place. Playwright fails it because it cannot read the state back. Assert on what replaced the control | by design |
+| `check()`, `uncheck()` | the same, except for two cases. The checked state is read until the action timeout after the click, where Playwright reads it once, so a controlled checkbox or switch that updates asynchronously passes. A control the click removes or navigates away from, such as a radio the app replaces with its selected view, passes: the click landed, even when the app renders an unchecked control in its place. Playwright fails it because it cannot read the state back. Assert on what replaced the control | by design |
 | `selectOption('pro')` | `selectOption('Pro')`: a string matches the option's label only, where Playwright matches its value or its label; `selectOption({ value: 'pro' })` for the value | by design |
 | `selectOption(['a', 'b'])` | not yet; one option per call. An array is `INVALID_ARGUMENT` | missing |
 | `setInputFiles({ name, buffer })` | not yet; paths only, resolved from the project root | missing |

@@ -5,7 +5,9 @@
  * resolved store, key derivation over the attempt's fixed identity, and the
  * staging ground for trace writes. Replay is eligible only on a first attempt
  * — a retry exists because something already went wrong, so it runs fresh and
- * re-records.
+ * re-records — unless `cache.strict` is on. A strict run treats the store as
+ * the reviewed source of truth: every attempt replays, and nothing is written
+ * or evicted, whatever the configured mode.
  */
 
 import path from 'node:path';
@@ -60,6 +62,7 @@ export interface ClaimedKey {
 }
 
 export interface AgentCacheContext {
+  /** The configured mode, except that `cache.strict` is always `read-only`. */
   readonly mode: 'read-only' | 'read-write';
   /** Never hand a cache miss to an executor. */
   readonly replayOnly?: boolean;
@@ -238,8 +241,9 @@ export function createAgentCacheContext(options: {
   /** The file store's listing under `cache.strict`, shared by the attempts of one worker and target (`storedRecordingsFor`). */
   readonly recordings?: StoredRecordings | undefined;
 }): AgentCacheContext | undefined {
-  const mode = options.cache.mode;
-  if (mode === 'off') return undefined;
+  if (options.cache.mode === 'off') return undefined;
+  const strict = options.cache.strict !== false;
+  const mode = strict ? 'read-only' : options.cache.mode;
   const store =
     options.cache.store ??
     new FileCacheStore({
@@ -262,7 +266,7 @@ export function createAgentCacheContext(options: {
     mode,
     store,
     replayOnly: options.cache.replayOnly === true,
-    replayEligible: options.cache.replayOnly === true || options.attemptIndex === 0,
+    replayEligible: strict || options.attemptIndex === 0,
     strict:
       options.cache.strict === false
         ? false

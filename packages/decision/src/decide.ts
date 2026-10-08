@@ -45,6 +45,7 @@ export async function decide(
   ctx: StepExecutorContext,
   model: DecisionExecutorOptions['model'],
   request: DecisionRequest,
+  providerOptions?: DecisionExecutorOptions['providerOptions'],
 ): Promise<Record<string, Decision>> {
   ctx.signal.throwIfAborted();
   const started = performance.now();
@@ -55,7 +56,12 @@ export async function decide(
   let providerMetadata: Record<string, Record<string, unknown>> | undefined;
   let answers: Record<string, RawAnswer>;
   try {
-    const call = { model, state: request.state, questions: request.questions };
+    const call = {
+      model,
+      state: request.state,
+      questions: request.questions,
+      ...(providerOptions === undefined ? {} : { providerOptions }),
+    };
     const result = await requireDecide()({
       ...(call as unknown as Parameters<typeof ai.experimental_decide>[0]),
       maxRetries: 0,

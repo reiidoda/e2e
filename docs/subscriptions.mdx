@@ -222,7 +222,7 @@ token, the run fails with `LOGIN_REQUIRED` and names the
 
 Use API keys in CI. `E2E_OAUTH_CREDENTIALS` can supply credential JSON
 instead of the local file, but refreshed tokens are not saved back to that
-variable. A value containing a rotating refresh token cannot be reused
+variable. Unset it before `e2e login`. A value containing a rotating refresh token cannot be reused
 indefinitely. See [CLI reference](/reference/cli#e2e-login) for all sign-in
 options.
 

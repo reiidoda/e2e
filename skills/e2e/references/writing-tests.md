@@ -235,11 +235,11 @@ attempt); a throwing read keeps polling, and it is not a report step. A
 poll that the body or a hook returns without awaiting is cancelled and fails
 that phase with `STEP_NOT_AWAITED`.
 `expect.soft(x)` keeps a failure instead of throwing; the attempt fails
-after the body with every soft failure listed. If the body calls `test.skip`,
-the test stays skipped and the failures remain in `secondaryErrors`. The CLI
-shows `Skipped After Failure`, also when a retry skips after an earlier
-failure. Set `failOnSkippedFailure: true` in the config to fail the run with
-exit code 1 in either case. The default is `false`; clean skips stay green.
+after the body with every soft failure listed. If the body then calls
+`test.skip`, the attempt still fails, with the skip reason in its `skip`.
+A retry that skips after an earlier failed attempt stays skipped; the CLI shows
+it under `Skipped After Failure`, and `failOnSkippedFailure: true` in the
+config fails the run with exit code 1. The default is `false`.
 `expect.any(Class)`, `expect.anything()`, `expect.objectContaining(obj)`,
 `expect.arrayContaining(arr)`, `expect.stringContaining(s)`, and
 `expect.stringMatching(s | RegExp)` stand in for values inside `toEqual`,

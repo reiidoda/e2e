@@ -62,7 +62,7 @@ bunx e2e run --no-cache
 ## How a replay works
 
 1. Check the starting screen: the same route, whatever the record id or the
-   fragment. Retries always run live.
+   fragment. Retries run live, except under `--strict-cache` or `cache.strict`.
 2. Find each recorded control and repeat its action. The runner matches
    controls by their role, name, test id, and surrounding context. It waits
    for missing controls and stops if a match is ambiguous. A control with no
@@ -195,7 +195,7 @@ such as an `afterEach` assertion.
 | Reason | What happened | What to do |
 | --- | --- | --- |
 | `no-entry` | No recording matches this step and its params. | The next verified pass records it. |
-| `retry` | Retries never replay. | Nothing. |
+| `retry` | Retries never replay, except under `--strict-cache` or `cache.strict`. | Nothing. |
 | `invalid-entry` | The file is unreadable, over 1 MiB, or from another schema version. | `npx e2e cache clear`. |
 | `truncated` | The recording hit a limit, see [below](#limits-and-gaps). | Split the step, or pass the secret as a `Secret`. |
 | `wrong-context` | The app was on another screen than when the step was recorded: a different origin, path, or query, not a different record id or fragment. | Open the same screen before the step. |
@@ -364,14 +364,19 @@ context. The message names that file and, for a recording made by this
 version or later, what changed (`the agent's context`); delete it once
 nothing replays it. A custom
 `cache.store` is not checked this way. Entries recorded before this check
-existed are covered once a `read-write` run replays or re-records them. A
-step never recorded (a new or edited instruction or params), a retry, a
-`gap`, and a `truncated` recording still run live. `REPLAY_STALE` exits 2 and is not retried, since a
-retry never replays and would pass live. The entry stays where it is, even
-in `read-write` mode, so every strict run fails on it until it is re-recorded:
-run the test in `read-write` mode without the flag, and with `cache.strict`
-off when the config set it, then commit the changed entry; a custom
-`cache.store` receives the new entry from that run instead. The message
+existed are covered once a `read-write` run without strict replays or
+re-records them. A step never recorded (a new or edited instruction or
+params), a `gap`, and a `truncated` recording still run live. A retry
+replays like the first attempt. `REPLAY_STALE` exits 2 and is not retried.
+
+A strict run never writes or deletes an entry, even in `read-write` mode:
+nothing it runs live is recorded, and a failure evicts nothing. A new step
+records only on a run without strict, so prefer `--strict-cache` in CI over
+`cache.strict` in the config. A stale
+entry stays where it is, so every strict run fails on it until it is
+re-recorded: run the test in `read-write` mode without the flag, and with
+`cache.strict` off when the config set it, then commit the changed entry; a
+custom `cache.store` receives the new entry from that run instead. The message
 names the knob that turned strict on and where the entry lives: the cache
 directory, or the configured `cache.store`. A store whose read fails is not
 a stale recording; the step runs live.

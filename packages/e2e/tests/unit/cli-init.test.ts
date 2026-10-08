@@ -894,4 +894,43 @@ describe('e2e init', () => {
       expect(lstatSync(path.join(dir, '.claude/skills')).isSymbolicLink()).toBe(true);
     });
   });
+
+  describe('a linked MCP config', () => {
+    // A junction works on Windows without the symlink privilege, and a symlink on POSIX.
+    const dirLink = process.platform === 'win32' ? 'junction' : 'dir';
+    // A junction needs no privilege, so the directory case runs on Windows whatever `symlinks` says; POSIX still needs it.
+    const canLinkDir = process.platform === 'win32' || symlinks;
+
+    it.skipIf(!symlinks)('is left alone under --yes, the warning names it, and the target keeps its own servers', async () => {
+      const elsewhere = mkdtempSync(path.join(os.tmpdir(), 'e2e-init-elsewhere-'));
+      try {
+        const target = path.join(elsewhere, 'mcp.json');
+        const original = '{"mcpServers":{"figma":{"command":"figma-mcp"}}}\n';
+        writeFileSync(target, original);
+        symlinkSync(target, path.join(dir, '.mcp.json'), 'file');
+        expect((await init(dir, { yes: true })).exitCode).toBe(0);
+        expect(output()).toContain(`Symlink, not touching: .mcp.json -> ${realpathSync(target)} (e2e mcp server)`);
+        expect(output()).not.toContain('Updated .mcp.json');
+        // The linked file is untouched and still a link; the other location is written normally.
+        expect(readFileSync(target, 'utf8')).toBe(original);
+        expect(lstatSync(path.join(dir, '.mcp.json')).isSymbolicLink()).toBe(true);
+        expect(JSON.parse(read('.cursor/mcp.json'))).toHaveProperty('mcpServers.e2e');
+      } finally {
+        rmSync(elsewhere, { recursive: true, force: true });
+      }
+    });
+
+    it.skipIf(!canLinkDir)('is left alone when a parent directory is the link, and nothing is written through it', async () => {
+      const elsewhere = mkdtempSync(path.join(os.tmpdir(), 'e2e-init-elsewhere-'));
+      try {
+        symlinkSync(elsewhere, path.join(dir, '.cursor'), dirLink);
+        expect((await init(dir, { yes: true })).exitCode).toBe(0);
+        expect(output()).toContain(`Symlink, not touching: .cursor -> ${realpathSync(elsewhere)} (e2e mcp server)`);
+        expect(readdirSync(elsewhere)).toEqual([]);
+        expect(JSON.parse(read('.mcp.json'))).toHaveProperty('mcpServers.e2e');
+      } finally {
+        rmSync(elsewhere, { recursive: true, force: true });
+      }
+    });
+  });
 });

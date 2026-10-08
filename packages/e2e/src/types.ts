@@ -1161,8 +1161,9 @@ export interface CacheConfig {
    * not found or ambiguous, a rejected action, an end state that did not
    * come back, the app on another screen, an unreadable entry) with
    * `REPLAY_STALE`, instead of handing it to the agent. A step with no
-   * recording, a retry, and a value read off the screen still run live.
-   * `--strict-cache` sets it for one run. Default `false`.
+   * recording and a value read off the screen still run live. Retries
+   * replay too, and the run never writes or deletes an entry, whatever
+   * the mode. `--strict-cache` sets it for one run. Default `false`.
    */
   strict?: boolean;
   /**
@@ -1429,7 +1430,7 @@ export interface E2EConfig {
   cleanupTimeout?: number;
   /** Retries per test, 0 through 10; default 1 in CI, else 0. */
   retries?: number;
-  /** Fail the run when a test skips itself after a soft failure or an earlier failed attempt; default false. */
+  /** Fail the run when a test skips a retry after an earlier failed attempt; default false. */
   failOnSkippedFailure?: boolean;
   /** Parallel workers, 1 through 1024; default 1 in CI, else half the cores. An engine may cap it lower. */
   workers?: number;

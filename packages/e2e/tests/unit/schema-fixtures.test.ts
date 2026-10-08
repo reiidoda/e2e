@@ -129,6 +129,24 @@ describe.each(schemas)('%s schema', (name) => {
       expect(validate.errors).toEqual(expect.arrayContaining([expect.objectContaining({ keyword: 'required', params: { missingProperty: 'interrupted' } })]));
     });
 
+    it('keeps a skip reason on a skipped or failed attempt, never on a passed one', () => {
+      const report = readJson('fixtures', 'report-v1.valid.json') as {
+        run: { results: { attempts: { status: string; skip?: unknown; error?: unknown }[] }[] };
+      };
+      const attempt = report.run.results[1]!.attempts[0]!;
+      expect(attempt).toMatchObject({ status: 'skipped', skip: { cause: 'explicit' } });
+      const { skip } = attempt;
+      delete attempt.skip;
+      expect(validate(report)).toBe(false);
+      attempt.skip = skip;
+      attempt.status = 'failed';
+      attempt.error = { category: 'test', code: 'ASSERTION_FAILED', message: '1 soft assertion failed', retryable: true, phase: 'body' };
+      expect(validate(report)).toBe(true);
+      delete attempt.error;
+      attempt.status = 'passed';
+      expect(validate(report)).toBe(false);
+    });
+
     it('lets a --last-failed rerun carry results, serial groups, and hook failures, at least one result of them', () => {
       const report = readJson('fixtures', 'report-v1.valid.json') as { run: { carried?: Record<string, unknown> } };
       const carried = report.run.carried!;

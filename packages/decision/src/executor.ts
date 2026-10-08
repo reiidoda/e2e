@@ -32,6 +32,9 @@ export function decisionExecutor(options: DecisionExecutorOptions): StepExecutor
   if (!inUnit(minProbability) || !inUnit(minConfidence)) {
     throw new ConfigurationError('INVALID_CONFIG', 'decisionExecutor({ minProbability, minConfidence }) must be between 0 and 1');
   }
+  if (options.providerOptions !== undefined && !isOptionsRecord(options.providerOptions)) {
+    throw new ConfigurationError('INVALID_CONFIG', 'decisionExecutor({ providerOptions }) maps provider names to option objects, e.g. { gateway: { zeroDataRetention: true } }');
+  }
   const textModel = options.textModel;
   return {
     name: 'decision',
@@ -73,6 +76,15 @@ function checkModel(model: unknown): void {
   if (!Array.isArray(supported) || !supported.includes('choice')) {
     throw new ConfigurationError('INVALID_CONFIG', `decisionExecutor({ model }) got ${name}, which does not answer choice questions`);
   }
+}
+/** A plain object whose every value is a plain object: the shape the AI SDK takes as providerOptions. */
+function isOptionsRecord(value: unknown): boolean {
+  const isRecord = (v: unknown): boolean => {
+    if (typeof v !== 'object' || v === null) return false;
+    const prototype: unknown = Object.getPrototypeOf(v);
+    return prototype === Object.prototype || prototype === null;
+  };
+  return isRecord(value) && Object.values(value as object).every(isRecord);
 }
 function inUnit(value: number): boolean {
   return Number.isFinite(value) && value >= 0 && value <= 1;
@@ -124,7 +136,7 @@ async function run(
     if (calls >= ctx.budgets.maxModelCalls) return undefined;
     transcript.push(JSON.stringify({ state: request.state, questions: request.questions }));
     calls += 1;
-    const answers = await decide(ctx, model, request);
+    const answers = await decide(ctx, model, request, options.providerOptions);
     transcript.push(JSON.stringify(answers));
     return answers;
   };

@@ -16,6 +16,11 @@ beside each one. Tests, config, and CI stay the same.
 No Mac, Xcode, or Android SDK on the machine that runs e2e.
 </Tip>
 
+<Note>
+This page is about EAS Simulators, the hosted devices. To run e2e in an EAS
+workflow, the CI service, see [EAS Workflows](/ci/eas-workflows).
+</Note>
+
 ## Setup
 
 <CodeGroup>
@@ -200,6 +205,7 @@ Without the indicator, stopping takes about two seconds.
 - Defaults `maxIdleTimeMinutes` to 10. A run that dies before the engine
   stops its sessions leaves them idle, and EAS stops them after that long.
 - Starts each daemon at the agent-device version `@e2e-dev/mobile` pins.
+- Starts no session for a request cancelled before creation.
 - Stops a session that errors, is cancelled, stays queued while another
   session of the run idles to `maxIdleTimeMinutes`, or is still booting 15
   minutes after leaving the queue, and treats one EAS no longer knows as

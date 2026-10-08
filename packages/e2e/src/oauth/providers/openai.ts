@@ -233,8 +233,8 @@ function deviceLogin(callbacks: OAuthLoginCallbacks, issuer: string, timeoutMs: 
     fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body), ...(signal === undefined ? {} : { signal }) });
   return runDeviceFlow<TokenResponse>({
     callbacks,
-    async start() {
-      const response = await json(`${issuer}/api/accounts/deviceauth/usercode`, { client_id: CLIENT_ID });
+    async start(signal) {
+      const response = await json(`${issuer}/api/accounts/deviceauth/usercode`, { client_id: CLIENT_ID }, signal);
       if (!response.ok) throw new OAuthError('FLOW_FAILED', `ChatGPT device login could not start: ${await describeResponse(response)}`);
       const device = (await response.json()) as { device_auth_id: string; user_code: string; interval?: string | number };
       return {

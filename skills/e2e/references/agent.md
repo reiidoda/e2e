@@ -277,8 +277,9 @@ matches. Misses and hand-offs use the model; `agent.assert`,
   and evict nothing.
 - With committed recordings, `--strict-cache` in CI fails a recording that
   no longer replays with `REPLAY_STALE` instead of quietly spending model
-  calls every run; re-record locally and commit. Unrecorded steps still run
-  live.
+  calls every run; re-record with a `read-write` run without the flag and
+  with `cache.strict` off, then commit. Unrecorded steps still run live;
+  retries replay too, and a strict run never writes the cache.
 
 - For a gate with zero model calls, set `cache: { replayOnly: true }` or
   pass `--replay-only`. This applies to `e2e run`; Explore and MCP sessions

@@ -185,7 +185,8 @@ that supports tool calls and images.
 DeepSeek's V4 models (`@ai-sdk/deepseek`) think by default, and in that mode
 they refuse the forced tool choice agent steps ask for. The step is sent again
 with `auto` and an instruction to reply with tool calls only, and later steps
-on that model start that way, so thinking can stay on.
+on that model start that way, so thinking can stay on. Meta's Muse Spark
+models accept only `auto` and are handled the same way.
 
 ## Several models in one config
 

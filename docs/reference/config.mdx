@@ -57,6 +57,7 @@ entry. Discovery visits
 only directories that could match, never enters one an exclusion takes whole,
 skips `node_modules`, and ignores symlinks. A dot directory is included only
 when a glob segment explicitly starts with a dot.
+`?` matches one Unicode code point, including an emoji.
 
 e2e loads no `.env` file itself. Load one at the top of `e2e.config.ts` with
 Node's `process.loadEnvFile()`; every worker imports the config again, so the
@@ -132,7 +133,7 @@ export interface E2EConfig {
   cleanupTimeout?: number;
   /** Retries per test, 0 through 10; default 1 in CI, else 0. */
   retries?: number;
-  /** Fail the run when a test skips itself after a soft failure or an earlier failed attempt; default false. */
+  /** Fail the run when a test skips a retry after an earlier failed attempt; default false. */
   failOnSkippedFailure?: boolean;
   /** Parallel workers, 1 through 1024; default 1 in CI, else half the cores. An engine may cap it lower. */
   workers?: number;
@@ -200,13 +201,13 @@ targeted agent action is bounded by the smaller of `actionTimeout` and 15 s.
 ## failOnSkippedFailure
 
 Set `failOnSkippedFailure: true` to fail the run with exit code 1 when a test
-skips after a soft assertion failure or skips a retry after an earlier failed
-attempt. The default is `false`.
+skips a retry after an earlier failed attempt. The default is `false`.
 
 The test keeps its `skipped` status and reason. Its failures remain in the
 report, and the CLI shows them under `Skipped After Failure` with either
 setting. Clean skips, successful retries, and engine cleanup diagnostics do
-not trigger this policy. A skip still stops the body and does not retry.
+not trigger this policy. A skip after a failed `expect.soft` needs no option:
+it [fails the attempt](/reference/test#members).
 
 ## targets
 
@@ -971,7 +972,8 @@ CI restores the cache from its own cache service; `--no-cache` wins over
 both. A custom `store` is exempt from the CI demotion and states its own
 trust through `writable`. `strict` (or `--strict-cache` for one run) turns a
 recording that exists but no longer replays into a `REPLAY_STALE` failure
-instead of a hand-off to the agent; see
+instead of a hand-off to the agent, and the run then never writes the
+cache; see
 [Fail on a stale recording](/cache#fail-on-a-stale-recording).
 
 `replayOnly: true` (or `--replay-only`) requires a complete replay of every

@@ -56,6 +56,10 @@ const pages = {
        <label for="agree">Agree to terms</label>
        <input id="agree" type="checkbox" />
 
+       <label for="newsletter">Subscribe to newsletter</label>
+       <input id="newsletter" type="checkbox" />
+       <button id="dark-mode" role="switch" aria-checked="false">Dark mode</button>
+
        <label for="color">Color</label>
        <select id="color" size="3">
          <option value="red">Red</option>
@@ -130,6 +134,25 @@ const pages = {
            const expanded = toggle.getAttribute('aria-expanded') === 'true';
            toggle.setAttribute('aria-expanded', String(!expanded));
            document.getElementById('details').hidden = expanded;
+         });
+
+         // Controlled toggles that commit their state after a save round
+         // trip, as a React checkbox or a headless switch does: the click
+         // leaves the control as it was, and the new state lands later.
+         document.getElementById('newsletter').addEventListener('click', (event) => {
+           const box = event.target;
+           const next = box.checked;
+           event.preventDefault();
+           setTimeout(() => {
+             box.checked = next;
+           }, 400);
+         });
+         const darkMode = document.getElementById('dark-mode');
+         darkMode.addEventListener('click', () => {
+           const next = darkMode.getAttribute('aria-checked') !== 'true';
+           setTimeout(() => {
+             darkMode.setAttribute('aria-checked', String(next));
+           }, 400);
          });
 
          document.getElementById('prepare').addEventListener('click', () => {
