@@ -134,7 +134,6 @@
               "index",
               "quickstart",
               "core-concepts",
-              "explore",
               "coding-agents"
             ]
           },
@@ -144,6 +143,16 @@
               "web",
               "mobile",
               "api-testing"
+            ]
+          },
+          {
+            "group": "Features",
+            "pages": [
+              "explore",
+              "visual-testing",
+              "authentication",
+              "bug-bash",
+              "agents"
             ]
           },
           {
@@ -171,7 +180,8 @@
             "pages": [
               "integrations/index",
               "integrations/kernel",
-              "integrations/eas"
+              "integrations/eas",
+              "integrations/smol"
             ]
           },
           {
@@ -186,12 +196,9 @@
             "group": "Deep dive",
             "pages": [
               "browser",
-              "bug-bash",
-              "authentication",
               "security",
               "telemetry",
               "debugging",
-              "agents",
               "agent-steps"
             ]
           },
@@ -226,6 +233,7 @@
             "pages": [
               "reference/config",
               "reference/cli",
+              "reference/runner",
               "reference/mcp",
               "reference/reporters",
               "reference/environment",

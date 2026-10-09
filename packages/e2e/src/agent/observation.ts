@@ -5,6 +5,7 @@ import type { Observation, SemanticNode, ViewportSize } from '../engine/surface.
 import type { SecretLedger } from '../internal/redact.ts';
 import { collapseText } from '../internal/text.ts';
 import { sleep } from '../internal/time.ts';
+import { pixelsProvenMasked } from '../run/secrecy.ts';
 import type { VisionDegradation } from '../run/steps.ts';
 import type { ExecutorNode, ExecutorObservation, ExecutorPixels } from './executor.ts';
 import { sizeForModel } from './pixels.ts';
@@ -312,9 +313,8 @@ function clearPixels(observation: Observation): {
 } {
   const pixels = observation.pixels;
   if (pixels === undefined) return {};
-  const { secureNodeCount, maskedRegionCount } = observation.redaction;
-  if (maskedRegionCount < secureNodeCount) return { withheld: 'MASKING_UNPROVEN' };
-  return { cleared: { ...pixels, maskedRegionCount } };
+  if (!pixelsProvenMasked(observation.redaction)) return { withheld: 'MASKING_UNPROVEN' };
+  return { cleared: { ...pixels, maskedRegionCount: observation.redaction.maskedRegionCount } };
 }
 
 /**

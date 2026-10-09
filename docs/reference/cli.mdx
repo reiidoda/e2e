@@ -385,6 +385,7 @@ or every test was filtered out.
 | `--no-cache` | boolean | `false` | Replay cache off for this run, whatever `config.cache` says, except `cache.replayOnly`, which it conflicts with. |
 | `--strict-cache` | boolean | `false` | Turns on `cache.strict` for this run: a step whose recording exists but no longer replays fails with `REPLAY_STALE` instead of handing off to the agent, retries replay too, and the run never writes the cache. See [Fail on a stale recording](/cache#fail-on-a-stale-recording). |
 | `--replay-only` | boolean | `false` | Require complete `agent.act` recordings without resolving a model or invoking an executor. Implies strict and read-only, including on retries. Missing or non-replayable steps and judgment methods fail with `REPLAY_MISSING`, exit 2. Conflicts with `--no-cache`. See [Replay-only runs](/cache#replay-only-runs). |
+| `-u`, `--update-snapshots` | boolean | `false` | Writes each stored screenshot [`toHaveScreenshot`](/reference/expect#screenshot-matchers) finds missing or different, and passes the matcher. Without it a missing one is written and fails, and in CI it is only attached to the results. |
 | `--pass-with-no-tests` | boolean | `false` | Exit 0 instead of `NO_TESTS` when nothing is selected. |
 | `--debug` | boolean | `false` | Phase timings and an agent step table on stderr after the run. |
 | `--ai-trace` | boolean | `false` | Records every model call to `<output>/ai-trace.json`, an AI SDK devtools database. Open it with [unbox-ai](https://github.com/tester-army/unbox-ai). |
@@ -643,7 +644,8 @@ e2e list [files...]
 
 A dry run. `list` selects tests exactly as `run` does, prints one line per
 test-target pair, and exits. No app process, engine, or worker starts, and
-nothing is written.
+nothing is written. The same selection is [`list` from `e2e/runner`](/reference/runner),
+in process. That function also returns pairs a filter removed.
 
 Positionals and the selection flags (`--config`, `--target`, `--tag`,
 `--tag-mode`, `--exclude-tag`, `--grep`, `--grep-invert`, `--last-failed`,
@@ -653,7 +655,7 @@ Positionals and the selection flags (`--config`, `--target`, `--tag`,
 | Reporter | Writes |
 | --- | --- |
 | `list` | One line per pair, `file › title [target]`, in selection order, with the describe path joined by ` › ` (`tests/billing.e2e.ts › checkout › pays [web]`), then each tag the test declares as `#tag` (`tests/billing.e2e.ts › checkout › pays [web] #smoke #billing`). A skipped test keeps its line with `(skipped: <reason>)` appended. Setup tests are listed like any other. |
-| `json` | `{ "pairs": [...] }` to stdout. Each pair carries `file`, `title`, `titlePath`, `kind` (`test` or `setup`), `tags` (the tags the test declares, `[]` when none), `target`, `disposition` (`run` or `skip`), and `skipReason` when skipped. |
+| `json` | `{ "pairs": [...] }` to stdout. Each pair carries `id`, `file`, `title`, `titlePath`, `kind` (`test` or `setup`), `tags` (the tags the test declares, `[]` when none), `source` when the declaration is known, `session` when the test consumes one, `sessions`, `serialId` when the test is in a serial group, `target`, `agent`, `disposition` (`run` or `skip`), and `reason` when skipped. |
 
 Pairs a filter removed are not listed.
 

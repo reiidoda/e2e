@@ -504,6 +504,9 @@ export function renderTracePage(report: Report1Document, result: ReportResult, f
         lines.push(`   > ${cell(step.explanation, MAX_DETAIL_CHARS)}`);
       }
       for (const line of stepDetailLines(step, told.appLog, options)) lines.push(`   - ${line}`);
+      for (const artifact of told.artifacts) {
+        if (artifact.kind === 'screenshot' && step.artifacts.includes(artifact.id)) lines.push(`   - ${artifactPath(artifact, options)}`);
+      }
       lines.push(...stepScreenLines(step.screen));
     });
     lines.push('');

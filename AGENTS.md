@@ -8,7 +8,7 @@ TypeScript 7.
 There is no separate spec. The code is the contract, pinned in three places:
 
 - The emitted `packages/e2e/dist/index.d.ts` (and `dist/engine/index.d.ts`,
-  `dist/oauth/*.d.ts`)
+  `dist/runner.d.ts`, `dist/oauth/*.d.ts`)
   is the public API. `packages/e2e/tests/types/sdk-types.ts` holds compile-time
   assertions (`@ts-expect-error` lines) for the parts that are easy to loosen
   by accident; it runs under the package `typecheck`, never under vitest.
@@ -85,6 +85,20 @@ suites that consume the built packages the way a user would.
   hosted iOS simulators and Android emulators for the mobile engine
   (`DeviceProvider`). Expo publishes no SDK for the sessions API, so it calls
   Expo's GraphQL API with `fetch`, and `@e2e-dev/mobile` is its only peer.
+- `packages/smol` - the published `@e2e-dev/smol` package: Chromium in
+  smol machines microVMs on the runner's own computer for the web engine
+  (`BrowserProvider`), through the `smolmachines` SDK's embedded engine
+  (peer). Each worker slot boots one warm browser machine from the pinned
+  Playwright Ubuntu image; a Node TCP relay exposes DevTools, and SDK agent
+  readiness allows machine startup without waiting for published ports. In
+  `attempt` scope every attempt runs in a copy-on-write branch. With `app`,
+  the app under test runs in the same machine, so a branch also copies its
+  running app and data on the machine. When maintaining this integration,
+  update the provider's SDK dev dependency to a published version and raise
+  its peer minimum only if the provider needs new SDK behavior. Keep the
+  Playwright image and Chromium version in sync with `@e2e-dev/web`. Run
+  `pnpm --filter @e2e-dev/smol test:unit` and `pnpm check`, then verify live
+  machines in both attempt and worker scopes with an app running in the VM.
 - `packages/decision` — the published `@e2e-dev/decision` package: a
   `StepExecutor` (`decisionExecutor()`) that drives `agent.act` and
   `agent.assert` through an AI SDK *decision* model answering `choice`
@@ -128,8 +142,8 @@ suites that consume the built packages the way a user would.
   diffs against the source minimal, and name no company a scenario was
   distilled from.
 - `examples/` — standalone user-facing projects, one per technology
-  (`with-vite`, `with-next`, `with-expo`, `with-swiftui`, `with-compose`,
-  `with-kotlin-multiplatform`, `with-flutter`), each the same
+  (`with-vite`, `with-next`, `with-astro`, `with-expo`, `with-swiftui`,
+  `with-compose`, `with-kotlin-multiplatform`, `with-flutter`), each the same
   one-screen greeter demo with deterministic and agent tests. They install
   the published packages from npm, sit outside the pnpm workspace, commit no
   lockfile, and run in no CI; oxlint and fallow ignore them. A change runs
@@ -155,9 +169,16 @@ suites that consume the built packages the way a user would.
   (gitignored) so the published package ships it; `src/cli/skill.ts` reads
   that copy first and the repo source as the fallback, and `e2e init` writes
   it into a project's `.agents/skills/` and `.claude/skills/`.
-- `.dev/skills/` — the skills we use to work on this repo (`babysit`,
-  `ship-pr`, `verify`, `writing-pr`). `npx skills add tester-army/e2e`
-  offers `e2e` alone: its default scan never looks in `.dev/`, and it skips
+- `skills/create-verification-skill/`: a generator skill for consumers;
+  it writes a project-local `verify-<app>` skill and feature map on top of
+  e2e, with the bug bash wired to the map. Installed with `npx skills add
+  tester-army/e2e --skill create-verification-skill`; not shipped in the
+  package and not read by `e2e guide`. `references/example/` is the skill
+  it generated and ran for `apps/testbed`: regenerate it when a playground
+  route, label, or test it names changes.
+- `.dev/skills/` — the skills we use to work on this repo (`authoring-docs`,
+  `babysit`, `ship-pr`, `verify`, `writing-pr`). `npx skills add tester-army/e2e`
+  offers only `skills/*`: its default scan never looks in `.dev/`, and it skips
   `.claude/skills/<name>`, the relative symlink to each that agents load
   them through, because it does not follow symlinked directories. Its
   `--full-depth` scan does reach `.dev/skills/`; there the frontmatter's
@@ -576,7 +597,7 @@ trees, on both platforms, without a device.
   needs `node scripts/restore-peer-ranges.ts` after it, or `pnpm check` fails
   on the pin.
 - The runner publishes as the unscoped `e2e` (entry points `e2e`, `e2e/agent`,
-  `e2e/engine`, `e2e/oauth/chatgpt`, `e2e/oauth/copilot`, `e2e/oauth/grok`, `e2e/oauth/opencode-console`; the bin is `e2e` too); engines, reporters, and integrations publish public
+  `e2e/engine`, `e2e/runner`, `e2e/oauth/chatgpt`, `e2e/oauth/copilot`, `e2e/oauth/grok`, `e2e/oauth/opencode-console`; the bin is `e2e` too); engines, reporters, and integrations publish public
   under the `@e2e-dev` scope. The `@e2edev` scope (moved to `@e2e-dev` on
   2026-09-28), `@e2edev/e2e`, `@e2edev/oauth` (folded into `e2e/oauth` on
   2026-09-21), and `@e2e-dev/integrations` (moved to `@e2e-dev/kernel` on

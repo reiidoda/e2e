@@ -446,6 +446,7 @@ A body or hook that hits the test `timeout` is abandoned, not cancelled, so
 teardown starts while it may still be running. A setup abandoned this way
 that reaches `use` later gets an immediate resolve, and its teardown runs
 detached from the run, so what it allocated is still released.
+Later fixtures, hooks, and the test body do not start after an abandoned setup or hook finishes.
 
 ## Function types
 

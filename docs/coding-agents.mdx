@@ -48,6 +48,37 @@ instructions. `init` leaves those files unchanged:
 End-to-end tests use e2e; read .agents/skills/e2e/SKILL.md before writing or running one.
 ```
 
+## A verification skill for your app
+
+The e2e skill teaches an agent the runner. It does not know how your app
+starts, which page proves a feature, or what is not a bug there. The
+`create-verification-skill` skill generates that as a project-local
+`.agents/skills/verify-<app>/` skill: launch and doctor commands from your
+config, the two ways to drive the app (a live `e2e mcp` session, a test),
+what evidence a proof keeps, and a feature map with one `e2e explore`
+charter per feature, so a bug bash fans out from the map. It runs its own
+instructions once before handing over.
+
+<CodeGroup>
+```bash npm
+npx skills add tester-army/e2e --skill create-verification-skill
+```
+
+```bash pnpm
+pnpm dlx skills add tester-army/e2e --skill create-verification-skill
+```
+
+```bash bun
+bunx skills add tester-army/e2e --skill create-verification-skill
+```
+</CodeGroup>
+
+Then ask the agent for `/create-verification-skill`. The generated skill
+links to the e2e skill for everything the runner does and says only what is
+true of your app. The skill is based on
+[create-verification-skill](https://github.com/cursor/plugins/tree/main/pstack/skills/create-verification-skill)
+from poteto's pstack, with e2e in place of a hand-rolled harness.
+
 ## How an agent looks at the app
 
 `e2e mcp` lets the coding agent open and interact with the app. Each agent,

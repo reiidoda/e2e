@@ -594,6 +594,12 @@ export interface EngineObserveOptions {
   readonly pixels?: boolean;
   /** Allows independently masked pixels to replace a failed semantic capture. Never granted after a secret fill. */
   readonly pixelFallback?: boolean;
+  /**
+   * The pixels are compared against a stored screenshot (`toHaveScreenshot`).
+   * Where the platform can, render what changes on its own outside the app
+   * in a fixed state: a status bar's clock, battery, and signal.
+   */
+  readonly comparable?: boolean;
 }
 
 /**

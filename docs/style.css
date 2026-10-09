@@ -798,6 +798,11 @@ html.dark body .code-block-fade-overlay {
   filter: invert(1);
 }
 
+/* The Astro mark is near-black, so it needs the same inversion. */
+.dark img[src*='/images/examples/astro.svg'] {
+  filter: invert(1);
+}
+
 /* Keep the wide Next.js wordmark legible alongside the square marks. */
 #content [data-component-part='card-icon']:has(> img[src*='/images/examples/nextjs.svg']),
 #content img[src*='/images/examples/nextjs.svg'] {

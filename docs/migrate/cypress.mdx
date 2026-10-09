@@ -99,7 +99,7 @@ describe('todos', () => {
 | `cy.contains('li', 'text')` | `screen.getByRole('listitem').filter({ hasText: 'text' })` |
 | `.find()`, `.within()` | Chain a query off the locator: `row.getByRole(...)` |
 | `.first()`, `.eq(n)` | `.first()`, `.nth(n)` |
-| `.click()`, `.dblclick()`, `.rightclick()` | `.tap()`, `.doubleTap()`, `.secondaryTap()` |
+| `.click()`, `.dblclick()`, `.rightclick()` | `.tap()`, `.doubleTap()` (or `.dblclick()`), `.secondaryTap()` |
 | `.type('text')` | `.fill('text')` replaces the content |
 | `.type('{enter}')` | `.press('Enter')` |
 | `.clear()`, `.check()`, `.select()` | `.clear()`, `.check()`, `.selectOption()` |

@@ -407,10 +407,23 @@ function relativeSource(
   source: { file: string; line: number; column: number } | undefined,
   fallbackFile: string,
 ): ReportSource {
-  if (source === undefined) return { file: fallbackFile, line: 1, column: 1 };
+  return projectSource(config?.projectRoot, source, fallbackFile) ?? { file: fallbackFile, line: 1, column: 1 };
+}
+
+/**
+ * A recorded declaration as the report writes it: project-relative, line and
+ * column at least 1. A file outside the project becomes `fallbackFile`; no
+ * recorded source stays `undefined`.
+ */
+export function projectSource(
+  projectRoot: string | undefined,
+  source: { readonly file: string; readonly line: number; readonly column: number } | undefined,
+  fallbackFile: string,
+): ReportSource | undefined {
+  if (source === undefined) return undefined;
   let file = source.file;
-  if (config !== undefined && path.isAbsolute(file)) {
-    file = projectRelativePath(config.projectRoot, file) ?? fallbackFile;
+  if (projectRoot !== undefined && path.isAbsolute(file)) {
+    file = projectRelativePath(projectRoot, file) ?? fallbackFile;
   }
   if (file.startsWith('/') || /^[A-Za-z]:/.test(file)) {
     file = fallbackFile;

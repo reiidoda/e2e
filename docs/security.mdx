@@ -7,7 +7,19 @@ icon: "shield-halved"
 Test code and configuration run with your operating-system permissions.
 This includes engines, tools, reporters, stores, secret providers, and app
 commands. e2e does not sandbox them. Run untrusted pull request code in an
-external sandbox without secrets or write tokens.
+external sandbox without secrets or write tokens. For a web app, `smol()`
+from `@e2e-dev/smol` can run the app under test inside a microVM beside its
+browser; see [Run the app in the machine](/integrations/smol#run-the-app-in-the-machine).
+The test code and config still run on your computer.
+
+## smol machines network access
+
+A browser or app running in a `smol()` machine has unrestricted outbound network
+access. The guest can reach services on your computer's loopback interface
+through `host.smolvm.internal`, including ports you did not list in
+`hostPorts`. The `hostPorts` option only exposes selected host ports as the
+guest's own `localhost`; it is not a host access policy. Do not run sensitive
+host loopback services while testing untrusted apps with `smol()`.
 
 The model receives app content as untrusted evidence. It requests actions
 through tools; the runner validates and performs those actions. Cached

@@ -768,6 +768,21 @@ describe('observation', () => {
     expect(treeOnly.root.children).toHaveLength(1);
   });
 
+  it('holds the status bar in a fixed state for a screenshot taken for comparison, and only then', async () => {
+    const h = harness();
+    const png = encodePng({ width: 195, height: 422, channels: 4, pixels: new Uint8Array(195 * 422 * 4).fill(255) });
+    const asked: unknown[] = [];
+    h.fake.respond('capture.screenshot', (args) => {
+      asked.push((args as { normalizeStatusBar?: boolean }).normalizeStatusBar);
+      writeFileSync((args as { path: string }).path, png);
+      return { path: (args as { path: string }).path };
+    });
+    await openAttempt(h);
+    await h.engine.observe!(operation(), { pixels: true });
+    await h.engine.observe!(operation(), { pixels: true, comparable: true });
+    expect(asked).toEqual([undefined, true]);
+  });
+
   it('withholds the pixels of a screen with a secure field when the image cannot be read or decoded', async () => {
     const h = harness();
     // A PNG signature and header naming the size, with no image data behind them: the size reads, the decode fails.

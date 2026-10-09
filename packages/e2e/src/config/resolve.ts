@@ -86,6 +86,8 @@ export interface ResolvedConfig {
   /** Every configured agent, `default` included, by name. */
   readonly agents: ReadonlyMap<string, ResolvedAgentConfig>;
   readonly cache: ResolvedCacheConfig;
+  /** `--update-snapshots`: `toHaveScreenshot` rewrites a stored screenshot that differs. */
+  readonly updateSnapshots: boolean;
   readonly limits: ResolvedLimits;
   readonly credentials: ReadonlyMap<string, ResolvedCredential>;
   /** The `config.secrets` entries by name: what `secrets.get()` and an engine option take. */
@@ -140,6 +142,8 @@ export interface CliOverrides {
   cacheStrict?: boolean;
   /** --replay-only: require recordings without resolving a model. */
   replayOnly?: boolean;
+  /** `--update-snapshots`: `toHaveScreenshot` rewrites a stored screenshot that differs. */
+  updateSnapshots?: boolean;
   /** `--output <dir>`: the results directory for this run, over the config's `output`. */
   output?: string;
   /** `--trace [mode]`: which attempts record a trace, over the config's and every target's `trace`. */
@@ -313,6 +317,7 @@ export function resolveConfig(
     agent,
     agents,
     cache,
+    updateSnapshots: cli.updateSnapshots === true,
     limits,
     credentials,
     secrets,

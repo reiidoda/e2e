@@ -244,6 +244,8 @@ export interface Locator extends Screen {
   click(options?: TapOptions): Promise<void>;
   /** Double-taps exactly one matching actionable node. */
   doubleTap(options?: ClickOptions): Promise<void>;
+  /** Alias of doubleTap. */
+  dblclick(options?: ClickOptions): Promise<void>;
   /** Performs a secondary tap, such as a right click or two-finger tap. */
   secondaryTap(options?: ClickOptions): Promise<void>;
   /** Long-presses exactly one matching actionable node. */
@@ -325,8 +327,8 @@ export interface Locator extends Screen {
   Playwright's `trial`, `force`, or `noWaitAfter` included, throws
   `INVALID_ARGUMENT` before the node is resolved, so the control is never
   touched.
-- `click` is an alias of `tap`.
-- `tap`, `doubleTap`, and `secondaryTap` take `modifiers`, the keys held for
+- `click` is an alias of `tap`, and `dblclick` of `doubleTap`.
+- `tap`, `doubleTap`, `dblclick`, and `secondaryTap` take `modifiers`, the keys held for
   the click, as a Shift-click extends a selection:
   `row.click({ modifiers: ['Shift'] })`. `ControlOrMeta` is Control on Windows
   and Linux, Meta on macOS. An unknown or repeated modifier is
@@ -610,7 +612,7 @@ export interface SwipePathOptions {
  */
 export type Point = ViewportPoint; // { x: number; y: number }
 
-/** `tap`, `click`, `doubleTap`, and `secondaryTap` options: the action timeout and the keys held for the click. */
+/** `tap`, `click`, `doubleTap`, `dblclick`, and `secondaryTap` options: the action timeout and the keys held for the click. */
 export interface ClickOptions extends ActionOptions {
   /**
    * Keys held while the pointer clicks, as a Shift-click extends a selection:

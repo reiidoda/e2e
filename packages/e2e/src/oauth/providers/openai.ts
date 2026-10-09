@@ -150,14 +150,19 @@ export function parseAuthorizationInput(input: string): { code: string | undefin
   return { code: value, state: undefined };
 }
 
-function exchangeCode(issuer: string, code: string, redirectUri: string, verifier: string): Promise<TokenResponse> {
-  return requestTokens('ChatGPT', `${issuer}/oauth/token`, {
-    grant_type: 'authorization_code',
-    code,
-    redirect_uri: redirectUri,
-    client_id: CLIENT_ID,
-    code_verifier: verifier,
-  });
+async function exchangeCode(issuer: string, code: string, redirectUri: string, verifier: string, signal?: AbortSignal): Promise<TokenResponse> {
+  try {
+    return await requestTokens('ChatGPT', `${issuer}/oauth/token`, {
+      grant_type: 'authorization_code',
+      code,
+      redirect_uri: redirectUri,
+      client_id: CLIENT_ID,
+      code_verifier: verifier,
+    }, 'FLOW_FAILED', signal);
+  } catch (cause) {
+    if (signal?.aborted) throw new OAuthError('CANCELLED', 'the login was cancelled', { cause });
+    throw cause;
+  }
 }
 
 interface BrowserLogin {
@@ -196,7 +201,7 @@ async function browserLogin(callbacks: OAuthLoginCallbacks, flow: BrowserLogin):
     const code = server === undefined ? await pasteCode(callbacks, state) : await answerOrPaste(server, callbacks, state, flow.timeoutMs);
     if (code === undefined) throw new OAuthError('FLOW_FAILED', 'no authorization code was received');
     callbacks.onProgress?.('Exchanging the code for tokens');
-    return await exchangeCode(flow.issuer, code, redirectUri, verifier);
+    return await exchangeCode(flow.issuer, code, redirectUri, verifier, callbacks.signal);
   } finally {
     server?.close();
   }
@@ -249,7 +254,7 @@ function deviceLogin(callbacks: OAuthLoginCallbacks, issuer: string, timeoutMs: 
       const response = await json(`${issuer}/api/accounts/deviceauth/token`, { device_auth_id: authorization.deviceCode, user_code: authorization.userCode }, signal);
       if (response.ok) {
         const grant = (await response.json()) as { authorization_code: string; code_verifier: string };
-        return { status: 'granted', value: await exchangeCode(issuer, grant.authorization_code, `${issuer}/deviceauth/callback`, grant.code_verifier) };
+        return { status: 'granted', value: await exchangeCode(issuer, grant.authorization_code, `${issuer}/deviceauth/callback`, grant.code_verifier, signal) };
       }
       // Pending shows as 403 or 404 until the user enters the code.
       if (response.status === 403 || response.status === 404) {

@@ -304,8 +304,8 @@ export class LocatorEngine {
   }
 
   /** Reads every current match at once, for `allTextContents`: a missing frame reads as no matches. */
-  async readAllNow(expression: LocatorExpression): Promise<readonly SemanticNode[]> {
-    return this.readEvery(expression, this.deadline(this.options.actionTimeout), 'empty');
+  async readAllNow(expression: LocatorExpression, deadline: Deadline = this.deadline(this.options.actionTimeout)): Promise<readonly SemanticNode[]> {
+    return this.readEvery(expression, deadline, 'empty');
   }
 
   private async readEvery(

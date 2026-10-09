@@ -18,6 +18,7 @@ import { FileCacheStore, MAX_CACHE_WIRE_BYTES } from '../cache/store.ts';
 import { discoverConfig, loadConfigModule, missingConfigError } from '../config/load.ts';
 import { resolveConfig } from '../config/resolve.ts';
 import { errorMessage } from '../internal/errors.ts';
+import { visibleWidth } from '../report/format.ts';
 
 export type CacheCommand = 'ls' | 'clear' | 'stats';
 
@@ -184,11 +185,11 @@ function list(contents: CacheContents): number {
     ]);
   const header = ['TEST', 'TARGET', 'INSTRUCTION', 'AGE', 'ACTIONS'];
   const widths = header.map((title, column) =>
-    Math.max(title.length, ...rows.map((row) => row[column]!.length)),
+    Math.max(visibleWidth(title), ...rows.map((row) => visibleWidth(row[column]!))),
   );
   const line = (cells: readonly string[]): string =>
     cells
-      .map((cell, column) => (column === cells.length - 1 ? cell : cell.padEnd(widths[column]!)))
+      .map((cell, column) => (column === cells.length - 1 ? cell : cell + ' '.repeat(widths[column]! - visibleWidth(cell))))
       .join('  ')
       .trimEnd();
   process.stdout.write(`${picocolors.bold(line(header))}\n`);

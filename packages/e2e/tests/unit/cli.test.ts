@@ -3,7 +3,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { stripVTControlCharacters } from 'node:util';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ListOptions, ListedPair, RunOptions } from '../../src/run/runner.ts';
+import type { ListOptions, ListedPair } from '../../src/runner.ts';
+import type { RunOptions } from '../../src/run/runner.ts';
 import { ConfigurationError } from '../../src/internal/errors.ts';
 import { SAMPLE_REPORT_SECRETS, sampleReport } from '../helpers/sample-report.ts';
 
@@ -13,10 +14,8 @@ const initMock = vi.hoisted(() => vi.fn());
 
 // The suite runs from the repository; these tests cover an installed CLI, where telemetry is on.
 vi.mock('../../src/telemetry/checkout.ts', () => ({ runsFromCheckout: () => false }));
-vi.mock('../../src/run/runner.ts', () => ({
-  run: runMock,
-  list: listMock,
-}));
+vi.mock('../../src/runner.ts', () => ({ list: listMock }));
+vi.mock('../../src/run/runner.ts', () => ({ run: runMock }));
 vi.mock('../../src/cli/init.ts', () => ({
   init: initMock,
 }));
@@ -343,19 +342,31 @@ describe('e2e run argument parsing', () => {
 });
 
 describe('e2e list', () => {
+  const listed = (
+    pair: Pick<ListedPair, 'file' | 'title' | 'titlePath' | 'tags' | 'target' | 'disposition'> & Partial<ListedPair>,
+  ): ListedPair => ({
+    id: pair.title,
+    kind: 'test',
+    source: undefined,
+    session: undefined,
+    sessions: [],
+    serialId: undefined,
+    agent: 'default',
+    ...pair,
+  });
   const pairs: ListedPair[] = [
-    { file: 'tests/a.e2e.ts', title: 'signs in', titlePath: ['signs in'], kind: 'test', tags: ['smoke', 'auth'], target: 'web', disposition: 'run' },
-    {
-      file: 'tests/a.e2e.ts',
-      title: 'pays',
-      titlePath: ['billing', 'pays'],
-      kind: 'test',
-      tags: ['billing'],
-      target: 'web',
-      disposition: 'skip',
-      skipReason: 'not today',
-    },
-    { file: 'tests/b.e2e.ts', title: 'browses', titlePath: ['browses'], kind: 'test', tags: [], target: 'webkit', disposition: 'run' },
+    listed({ file: 'tests/a.e2e.ts', title: 'signs in', titlePath: ['signs in'], tags: ['smoke', 'auth'], target: 'web', disposition: 'run' }),
+    listed({ file: 'tests/a.e2e.ts', title: 'pays', titlePath: ['billing', 'pays'], tags: ['billing'], target: 'web', disposition: 'skip', reason: 'not today' }),
+    listed({ file: 'tests/b.e2e.ts', title: 'browses', titlePath: ['browses'], tags: [], target: 'webkit', disposition: 'run' }),
+    listed({
+      file: 'tests/b.e2e.ts',
+      title: 'filtered out',
+      titlePath: ['filtered out'],
+      tags: [],
+      target: 'webkit',
+      disposition: 'filtered',
+      reason: 'title does not match --grep',
+    }),
   ];
 
   function lastListOptions(): ListOptions {
@@ -393,7 +404,9 @@ describe('e2e list', () => {
     listMock.mockResolvedValue({ pairs });
     await invoke('list', '--reporter', 'json');
     expect(process.exitCode).toBe(0);
-    expect(JSON.parse(written(stdoutSpy))).toEqual({ pairs });
+    const printed = { pairs: pairs.filter((pair) => pair.disposition !== 'filtered') };
+    expect(JSON.parse(written(stdoutSpy))).toEqual(JSON.parse(JSON.stringify(printed)));
+    expect(written(stdoutSpy)).not.toContain('skipReason');
   });
 
   it('passes the selection flags through and rejects the junit reporter', async () => {
@@ -414,8 +427,8 @@ describe('e2e list', () => {
     );
     expect(lastListOptions()).toEqual({
       files: ['tests/a.e2e.ts'],
-      configPath: 'custom.config.ts',
-      targetIds: ['web', 'webkit'],
+      config: 'custom.config.ts',
+      targets: ['web', 'webkit'],
       tags: ['smoke', 'auth'],
       tagMode: 'all',
       passWithNoTests: true,
@@ -432,7 +445,7 @@ describe('e2e list', () => {
 
   it('splits comma-separated --tag and --target values and rejects an empty one, like run', async () => {
     await invoke('list', '--tag', 'smoke,auth', '--tag', 'smoke', '--target', 'web,webkit');
-    expect(lastListOptions()).toMatchObject({ tags: ['smoke', 'auth'], targetIds: ['web', 'webkit'] });
+    expect(lastListOptions()).toMatchObject({ tags: ['smoke', 'auth'], targets: ['web', 'webkit'] });
     listMock.mockClear();
     process.exitCode = undefined;
     await invoke('list', '--tag', '');
@@ -531,6 +544,7 @@ describe('e2e --version and --help', () => {
       '--no-cache',
       '--replay-only',
       '--strict-cache',
+      '-u',
       '--reporter',
       '--output',
       '--debug',

@@ -1,0 +1,78 @@
+---
+title: "e2e/runner"
+description: "List the tests a config and a selection would run, without starting a run."
+icon: "file-lines"
+---
+
+`list` collects and selects the way [`e2e list`](/reference/cli#e2e-list) does, and stops there. No app process, engine, or worker starts, and nothing is written.
+
+```ts
+import { isE2EError, list } from 'e2e/runner';
+
+const { pairs, unmatched, targets } = await list({
+  files: ['tests/signup.e2e.ts'],
+  grep: [/checkout/],
+});
+
+for (const pair of pairs) {
+  console.log(`${pair.id} ${pair.disposition} ${pair.titlePath.join(' › ')}`);
+}
+```
+
+## Options
+
+`list` takes one object. Omit `config` to discover `e2e.config.ts` from `cwd`, the same walk `e2e list` does.
+
+| Option | Meaning |
+| --- | --- |
+| `config` | A config file path, or an `E2EConfig` value in place of a file. |
+| `targets` | Target names (`--target`). An unknown name is `UNKNOWN_TARGET`. |
+| `cwd` | Project directory. Defaults to the current working directory. |
+| `files` | Positional file selection: paths, globs, bare names, and `file:line`. |
+| `tags`, `tagMode`, `excludeTags` | The `--tag`, `--tag-mode`, and `--exclude-tag` filters. |
+| `grep`, `grepInvert` | `RegExp` arrays. A test's describe titles and title, joined by spaces, must match one `grep` pattern and no `grepInvert` pattern. |
+| `lastFailed` | Only tests the previous run did not pass, read from `report.json` under `output`. |
+| `shard` | `{ index, total }`, the `--shard index/total` slice. |
+| `passWithNoTests` | Resolve with no runnable test instead of throwing `NO_TESTS`. |
+| `output` | Results directory, over the config's `output`. `lastFailed` reads `report.json` there. |
+| `env` | Environment the config resolves against. Defaults to `process.env`. |
+
+## Result
+
+`ListResult` is `{ pairs, unmatched, targets }`.
+
+`pairs` is one `ListedPair` per test, target, and agent, in selection order, including pairs a filter removed. Repeats are not expanded. `unmatched` is the positional arguments, as written, that selected no discovered file. `targets` is the selected target names, in config order.
+
+| Field | Meaning |
+| --- | --- |
+| `id` | The result id `report.json` stores for repeat 0. |
+| `file`, `title`, `titlePath`, `kind`, `tags` | The collected test. `kind` is `test` or `setup`. `tags` is `[]` when the test declares none. |
+| `source` | The declaration, project-relative: `{ file, line, column }`. `undefined` when the test recorded none. |
+| `session` | The session the test consumes, from the test or its describe chain. `undefined` when it consumes none. |
+| `sessions` | Session names a setup produces. `[]` on an ordinary test. |
+| `serialId` | Set when the test belongs to a serial group, otherwise `undefined`. |
+| `target`, `agent` | The target name and the configured agent this pair runs as. |
+| `disposition` | `run`, `skip`, or `filtered`. |
+| `reason` | Why the pair is skipped or filtered. Omitted when it runs. |
+
+`e2e list` prints only `run` and `skip`. `list` returns `filtered` pairs too, each with `reason` (for example `title does not match --grep`).
+
+## Errors
+
+A failure is the same classified error `e2e list` exits with. `instanceof` can miss it across copies of the package. Recognize one with `isE2EError` and branch on `error.code`. `ConfigurationError` and `isE2EError` are both exported from `e2e/runner`.
+
+An empty selection throws `ConfigurationError` `NO_TESTS` unless `passWithNoTests`. An unknown target is `UNKNOWN_TARGET`. A missing config, a config the loader refused, and a collection failure throw the same codes `run` records.
+
+```ts
+import { isE2EError, list } from 'e2e/runner';
+
+try {
+  await list({ targets: ['missing'] });
+} catch (error) {
+  if (isE2EError(error) && error.code === 'UNKNOWN_TARGET') {
+    console.error(error.message);
+  }
+}
+```
+
+Each call imports the test files again, so a later `list()` in the same process sees an edit.

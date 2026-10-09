@@ -637,6 +637,8 @@ export interface EngineObserveOptions {
   readonly pixels?: boolean;
   /** Permits independently masked pixels to replace a failed semantic capture. */
   readonly pixelFallback?: boolean;
+  /** The pixels are compared against a stored screenshot: hold system chrome (a status bar's clock and battery) in a fixed state where the platform can. */
+  readonly comparable?: boolean;
 }
 ```
 

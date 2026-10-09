@@ -1,0 +1,225 @@
+---
+title: smol machines browsers
+sidebarTitle: smol machines
+description: Run each web test attempt in its own branch of a warm Chromium microVM on your computer with the smol() browser provider from @e2e-dev/smol.
+icon: "/images/integrations/smol.png"
+---
+
+`smol()` from `@e2e-dev/smol` is a
+[browser provider](/browser#hosted-browsers) for
+[smol machines](https://smolmachines.com) microVMs on the computer the run
+starts on. Each worker slot boots one Chromium machine, and by default every
+test attempt runs in a copy-on-write branch of that running browser, typically
+ready in about a second and deleted when the attempt ends. With `app`, the app
+under test runs inside the VM instead of as a process on your computer.
+In the default attempt scope, every attempt gets its own copy of the app and
+its data. The guest can still reach host loopback services through
+`host.smolvm.internal`; see [Security model](/security#smol-machines-network-access).
+Tests stay the same; the config changes only in the target's `browser` and
+`app.url`.
+
+## Why choose smol machines
+
+Choose `smol()` when tests change browser state or an app's local data and
+retries need to start from the same prepared state. In the default `attempt`
+scope, each attempt branches a warm browser's memory and disk. With `app`,
+the branch also contains its own running app and files or database on the VM.
+One attempt's changes to that state cannot affect the next attempt. You can
+use `prepare` to sign in once before branching instead of repeating the login
+in every test.
+
+The machines run on your computer without a hosted browser account. This is
+useful for tests that need disposable, writable app state, especially when
+resetting an app after a failure is difficult. State in external services
+remains shared across attempts.
+
+## Setup
+
+<CodeGroup>
+```bash npm
+npm install --save-dev @e2e-dev/smol smolmachines playwright-core@1.63.0
+```
+
+```bash pnpm
+pnpm add -D @e2e-dev/smol smolmachines playwright-core@1.63.0
+```
+
+```bash bun
+bun add -d @e2e-dev/smol smolmachines playwright-core@1.63.0
+```
+</CodeGroup>
+
+```ts title="e2e.config.ts"
+import type { E2EConfig } from 'e2e';
+import { web } from '@e2e-dev/web';
+import { smol } from '@e2e-dev/smol';
+
+export default {
+  targets: [
+    {
+      name: 'web',
+      engine: web({ browser: smol({ hostPorts: [3000] }) }),
+      app: {
+        url: 'http://localhost:3000',
+        command: { executable: 'npm', args: ['run', 'dev'] },
+      },
+    },
+  ],
+  workers: 4,
+} satisfies E2EConfig;
+```
+
+`smolmachines` embeds the smol engine, so there is no service to sign up for
+and no key: machines run on macOS on Apple Silicon, or on Linux with KVM
+(`/dev/kvm`). Each machine gets outbound network access to install Chromium
+and reach your app.
+
+## How it works
+
+The first attempt on a worker slot boots that slot's browser machine:
+the pinned Playwright Ubuntu image with its matching Chromium already
+installed. The first pull can take longer; subsequent boots reuse the cached
+image. The browser disables its back/forward cache so history navigation
+can reliably wait for page load over DevTools; going back reloads the page.
+Every attempt then branches the running machine: the branch shares the browser's memory and disk copy-on-write, so
+it starts with Chromium already up, typically in about a second, and what
+one attempt does on the machine never reaches another. This is an estimate,
+not a readiness guarantee: on `smolmachines` 1.23.7 and earlier, published-port
+latency can intermittently take longer than a sub-second timeout. Allow for
+port readiness when setting test timeouts. The branch is deleted when the
+attempt ends; the warm machines go when the run finishes.
+
+## Start every test signed in
+
+`prepare` drives the warm browser once, before any attempt branches it.
+Whatever it leaves in the browser (cookies, storage, open pages) is where
+every attempt on that slot starts. The example drives it with Playwright.
+The install commands above include `playwright-core@1.63.0`, the version
+`@e2e-dev/web` currently pins. If you upgrade `@e2e-dev/web`, match its
+Playwright version; pnpm cannot import a transitive dependency directly from
+your config:
+
+```ts title="e2e.config.ts"
+import { chromium } from 'playwright-core';
+
+smol({
+  hostPorts: [3000],
+  prepare: async (cdpEndpoint) => {
+    const browser = await chromium.connectOverCDP(cdpEndpoint);
+    const page = browser.contexts()[0]!.pages()[0]!;
+    await page.goto('http://localhost:3000/login');
+    await page.getByLabel('Email').fill('qa@example.com');
+    await page.getByLabel('Password').fill(process.env.QA_PASSWORD!);
+    await page.getByRole('button', { name: 'Sign in' }).click();
+    await page.waitForURL('**/dashboard');
+    await browser.close();
+  },
+})
+```
+
+`browser.close()` on a browser from `connectOverCDP` disconnects and leaves
+the browser running, which is what `prepare` must do before it resolves.
+Attempts run in the browser's default context, so the session `prepare`
+signed in is the one they see. This takes the place of
+[sessions](/authentication), which a per-attempt lease cannot use.
+
+## Run the app in the machine
+
+`app` runs the app under test inside each browser machine instead of on your
+computer. Its code, and whatever a test or an agent makes it do, never runs
+on the host. In `'attempt'` scope every attempt's branch also holds its own
+copy of the running app and everything it wrote to disk, a database
+included, so tests never see each other's data and nothing needs resetting
+between them. That covers what the app keeps on the machine: a database on
+another host is still shared by every attempt, so give it its own isolation:
+
+```ts title="e2e.config.ts"
+export default {
+  targets: [
+    {
+      name: 'web',
+      engine: web({
+        browser: smol({
+          app: {
+            source: '.',
+            setup: 'npm ci && npm run db:seed',
+            start: 'npm start',
+            port: 3000,
+            env: { DATABASE_URL: 'file:/app/dev.db' },
+          },
+        }),
+      }),
+      app: { url: 'http://localhost:3000' },
+    },
+  ],
+} satisfies E2EConfig;
+```
+
+`source` is copied into the machine at `/app`, without `node_modules`,
+`.git`, or `.e2e`, so `setup` installs dependencies for the machine's Linux.
+`setup` and `start` run there once per machine boot, including a replacement
+after worker recovery, and the run waits until
+the app answers on `port` before `prepare`. The machine uses the Playwright
+Ubuntu image and already includes Node.js and npm, so `setup` can run
+`npm ci`. Declare no `app.command`: the browser
+reaches the app at `http://localhost:<port>` inside its machine, and your
+computer never serves it.
+
+| `app` field | Meaning |
+| ----------- | ------- |
+| `start`     | Shell command that serves the app, run in `/app` in the background. Required. |
+| `port`      | Port the app listens on inside the machine. Required; not 80 or 9229, which the browser uses. |
+| `source`    | Directory on your computer copied in, resolved against where the run starts. `.` by default. |
+| `setup`     | Shell script run in `/app` before `start`: a runtime, dependencies, a seeded database. |
+| `env`       | Environment for `setup` and `start`. |
+
+## Reach your app
+
+Inside the machine, `localhost` is the machine itself. `hostPorts` lists the
+ports on your computer's loopback the browser reaches as its own
+`localhost`, so `app.url` stays `http://localhost:3000`. An app on another
+host needs nothing: the machine reaches it over the network. `hostPorts`
+only creates convenient guest `localhost` relays; it does not restrict guest
+access to your computer. The guest can also connect to any host loopback port
+through `host.smolvm.internal`, and has unrestricted outbound network access.
+See [Security model](/security#smol-machines-network-access).
+
+## Options
+
+| Option      | Default     | Meaning |
+| ----------- | ----------- | ------- |
+| `scope`     | `'attempt'` | `'attempt'`: every attempt runs in its own branch of the slot's warm browser. `'worker'`: one browser machine per worker slot for the run, no branching. See [Scopes](#scopes). |
+| `prepare`   | none        | `(cdpEndpoint) => Promise<void>`, run once on each warm browser before it is branched. `'attempt'` scope only. See [Start every test signed in](#start-every-test-signed-in). |
+| `hostPorts` | `[]`        | Ports on your computer's loopback the browser reaches as its own `localhost`. |
+| `setup`     | none        | Shell script run as root in each machine before Chromium starts, such as `apt-get update && apt-get install -y fonts-noto-cjk` for more fonts. |
+| `app`       | none        | Runs the app under test inside each machine. See [Run the app in the machine](#run-the-app-in-the-machine). |
+| `cpus`      | `2`         | vCPUs per browser machine. |
+| `memoryMb`  | `2048`      | Memory per browser machine in MiB. Memory the browser does not use goes back to your computer. |
+
+## Scopes
+
+`scope: 'attempt'` (the default) gives every attempt a fresh browser that
+starts from the prepared state, retries included. It carries the limits of a
+[per-attempt lease](/browser#hosted-browsers): no `headers`, `basicAuth`,
+`userAgent`, `locale`, or `timezoneId`, no `app.clearState()`, and no
+[sessions](/authentication), which fail the run before any test. Use
+`prepare` for what those would set up.
+
+`scope: 'worker'` keeps one browser machine per worker slot for the whole run
+and gives every attempt a new browser context on it, as a local run does.
+Sessions and the per-lease options work there; nothing is branched, and
+`prepare` is refused, since a new context never sees what it set.
+
+## Downloads
+
+Each browser saves downloads to its own machine's disk, and
+`browser.waitForDownload` reads them back through the SDK, so downloads work
+as they do locally.
+
+## Cleanup
+
+Machines are named after the run and the target. The engine deletes an
+`'attempt'`-scope worker's machines when that worker exits. Worker-scope
+browsers, and those of a worker killed before it could clean up, are left
+behind, and the runner deletes them when the run finishes, after the last
+worker exits. `smol machine ls` lists anything left over.

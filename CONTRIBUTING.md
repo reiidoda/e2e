@@ -49,7 +49,8 @@ This project is a pnpm monorepo. `packages/` holds what publishes to npm,
 - `apps/mobile-benchmark`: private Expo app of hard mobile surfaces plus the e2e suites written against them
 - `docs/`: the docs site, built with [Mintlify](https://mintlify.com)
 - `skills/e2e/`: the agent skill shipped with the package and installed by `e2e init`
-- `.dev/skills/`: the skills coding agents use to work on this repo, symlinked from `.claude/skills/` so `npx skills add tester-army/e2e` offers only `e2e`
+- `skills/create-verification-skill/`: the generator of a project-local `verify-<app>` skill, installed with `npx skills add tester-army/e2e --skill create-verification-skill`
+- `.dev/skills/`: the skills coding agents use to work on this repo, symlinked from `.claude/skills/` so `npx skills add tester-army/e2e` offers only `skills/*`
 
 On Windows, enable Developer Mode and clone with
 `git clone -c core.symlinks=true` so those symlinks check out as links rather
@@ -182,6 +183,11 @@ When adding a new public package:
 - `next`: release candidates cut from `main` ahead of a `latest` release.
   This is the build we ask reporters to confirm a fix against. Install with
   `@next`.
+- `nightly`: a snapshot of `main` published by the release workflow every
+  night at 03:00 UTC, and on demand by running the workflow by hand from the
+  Actions tab. A night with nothing new on `main` publishes nothing, and a
+  commit whose `spec gate` is not green fails the run instead of shipping.
+  Install with `@nightly`.
 - `canary`: a build of `main` cut by hand ahead of the next versioned release.
   Install with `@canary`. The quickstart installs `latest`.
 
@@ -189,8 +195,10 @@ Versioned releases publish to `latest`: the root `release` script passes no
 `--tag`, and each publishable package carries `publishConfig.tag: "latest"` as
 a backstop for a hand-run `npm publish`. `next` is not cut yet.
 
-A canary is a changesets snapshot release, published from a maintainer's
-machine, never from CI:
+A nightly is the same snapshot release run from the `nightly` job in
+`release.yml`, versioned as `<next version>-nightly-<datetime>` and published
+with `--tag nightly`. A canary is the hand-run form, published from a
+maintainer's machine:
 
 ```sh
 GITHUB_TOKEN=<token> pnpm run canary
@@ -260,5 +268,5 @@ build against, and what a third-party engine builds against too. A change to
 that contract bumps all three packages together in one release, with a
 changeset for each, so an engine and a runner from the same release always
 match. Engines declare a peer range on `e2e` that points one way only
-(engine to runner, `>=x <1`), and each integration (`@e2e-dev/kernel`, `@e2e-dev/eas`) does
+(engine to runner, `>=x <1`), and each integration (`@e2e-dev/kernel`, `@e2e-dev/eas`, `@e2e-dev/smol`) does
 the same on the engines it plugs into; do not make it mutual or narrow it.

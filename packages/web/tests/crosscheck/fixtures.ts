@@ -12,6 +12,22 @@ export interface FixturePage {
 
 export const FIXTURE_PAGES: readonly FixturePage[] = [
   {
+    name: 'shadow section landmarks',
+    html: `
+      <article><div id="article-shadow"></div></article>
+      <div role="region" aria-label="News"><div id="region-shadow"></div></div>
+      <div id="page-shadow"></div>
+      <script>
+        for (const id of ['article-shadow', 'region-shadow', 'page-shadow']) {
+          const root = document.getElementById(id).attachShadow({ mode: 'open' });
+          root.innerHTML = '<div></div>';
+          root.firstElementChild.attachShadow({ mode: 'open' }).innerHTML =
+            '<header aria-label="' + id + ' header">Heading</header><footer aria-label="' + id + ' footer">Footer</footer>';
+        }
+      </script>
+    `,
+  },
+  {
     name: 'inferred table headers',
     html: `
       <table><tr><th>Item</th><td>Value</td></tr></table>

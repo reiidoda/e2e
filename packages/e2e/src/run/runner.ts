@@ -12,7 +12,16 @@ import {
 } from '../config/resolve.ts';
 import { collect, collectInMemory, collectSetups, type Collection } from '../collect/collect.ts';
 import type { ModuleRegistration } from '../collect/registry.ts';
-import { repeatEach, select, selectTargets, type Selection, type SelectionFilters, type Shard, type TagMode } from '../collect/select.ts';
+import {
+  repeatEach,
+  select,
+  selectTargets,
+  type Selection,
+  type SelectionFilters,
+  type Shard,
+  type TagMode,
+  type TestTargetPair,
+} from '../collect/select.ts';
 import {
   classifyError,
   combineExitCodes,
@@ -26,9 +35,9 @@ import {
 import { loadAiSdk } from '../agent/ai-sdk.ts';
 import { AiTraceCollector, AiTraceRecorder, registerAiTraceRecorder } from '../internal/ai-trace.ts';
 import { DebugTrace } from '../internal/debug.ts';
-import { timestamp, uuidv7 } from '../internal/ids.ts';
+import { resultId, timestamp, uuidv7 } from '../internal/ids.ts';
 import type { ExploreProgress } from '../explore/progress.ts';
-import { buildReport, type Report1Document, type ReportExplore, type TargetProvenance } from '../report/build.ts';
+import { buildReport, projectSource, type Report1Document, type ReportExplore, type TargetProvenance } from '../report/build.ts';
 import { agentStepTable } from '../report/debug-steps.ts';
 import { writeTracePages, type TracePages } from '../report/traces.ts';
 import { STATELESS_REPORTERS } from '../report/builtin.ts';
@@ -112,6 +121,8 @@ export interface RunOptions {
   strictCache?: boolean | undefined;
   /** Require replayable recordings and never resolve models (--replay-only). */
   replayOnly?: boolean | undefined;
+  /** Rewrites the stored screenshots `toHaveScreenshot` finds different (`--update-snapshots`). */
+  updateSnapshots?: boolean | undefined;
   /**
    * The configured agents unpinned tests run as (`--agent`), instead of
    * `agents.default`. Several names run every such test once per agent.
@@ -209,72 +220,109 @@ function consumesSession(registration: ModuleRegistration): boolean {
 /** How long a reporter's `onRunFinished` may take before the run stops waiting for it. */
 const REPORTER_TIMEOUT_MS = 60_000;
 
-/** The selection flags of `run`, without anything that would start a process. */
-export type ListOptions = Pick<
-  RunOptions,
-  | 'cwd'
-  | 'configPath'
-  | 'files'
-  | 'tags'
-  | 'tagMode'
-  | 'excludeTags'
-  | 'grep'
-  | 'grepInvert'
-  | 'lastFailed'
-  | 'shard'
-  | 'targetIds'
-  | 'passWithNoTests'
-  | 'output'
-  | 'rawConfig'
-  | 'env'
->;
+/**
+ * What `list` selects on. `config` is a path or a config value (omit it to
+ * discover `e2e.config.ts`); `targets` are target names. The rest are the
+ * selection flags `run` takes, under the same names.
+ */
+export interface ListOptions
+  extends Pick<
+    RunOptions,
+    | 'cwd'
+    | 'files'
+    | 'tags'
+    | 'tagMode'
+    | 'excludeTags'
+    | 'grep'
+    | 'grepInvert'
+    | 'lastFailed'
+    | 'shard'
+    | 'passWithNoTests'
+    | 'output'
+    | 'env'
+  >
+{
+  /**
+   * A config file path, or a config value in place of a discovered file.
+   * Omit it to discover `e2e.config.ts` from `cwd`.
+   */
+  config?: string | E2EConfig | undefined;
+  /** Target names (`--target`). An unknown name is `UNKNOWN_TARGET`. */
+  targets?: readonly string[] | undefined;
+}
 
-/** One test-target pair the runner would report, as `e2e list` prints it. */
+/**
+ * One test, target, and agent the selection produced, filtered pairs
+ * included. `id` is the result id `report.json` stores for repeat 0.
+ * `source`, `session`, and `serialId` are present and `undefined` when the
+ * test has none; `reason` is omitted unless the pair is skipped or filtered.
+ */
 export interface ListedPair {
+  readonly id: string;
   readonly file: string;
   readonly title: string;
   readonly titlePath: readonly string[];
   readonly kind: 'test' | 'setup';
   /** The tags the test declares; `[]` when none. */
   readonly tags: readonly string[];
+  /** The declaration, project-relative. `undefined` when the test recorded none. */
+  readonly source: { readonly file: string; readonly line: number; readonly column: number } | undefined;
+  /** The session the test consumes, from the test or its describe chain. */
+  readonly session: string | undefined;
+  /** Session names a setup produces; `[]` on an ordinary test. */
+  readonly sessions: readonly string[];
+  /** Set when the test belongs to a serial group. */
+  readonly serialId: string | undefined;
   readonly target: string;
-  readonly disposition: 'run' | 'skip';
-  readonly skipReason?: string;
+  /** The configured agent this pair runs as. */
+  readonly agent: string;
+  readonly disposition: 'run' | 'skip' | 'filtered';
+  /** Why the pair is skipped or filtered; omitted when it runs. */
+  readonly reason?: string;
+}
+
+/** The selection `list` returns. */
+export interface ListResult {
+  /** One pair per test, target, and agent, in selection order, filtered pairs included. */
+  readonly pairs: readonly ListedPair[];
+  /** Positional arguments, as written, that selected no discovered file. */
+  readonly unmatched: readonly string[];
+  /** Selected target names, in config order. */
+  readonly targets: readonly string[];
 }
 
 /**
- * Collects and selects like `run` and stops there: no app process, no engine
- * prepare, no worker. The pairs are the ones `run` would report, in report
- * order; pairs the selection filtered out are left out, as the list reporter
- * leaves them out. Config, collection, and selection failures throw the same
- * classified error `run` would record.
+ * Collects and selects like `e2e list` and stops there: no app process, no
+ * engine prepare, no worker. Every pair is returned, filtered ones included,
+ * in selection order, one per test, target, and agent; repeats are not
+ * expanded. `unmatched` is the positional arguments that selected no file,
+ * `targets` the selected target names in config order. An empty selection
+ * throws `NO_TESTS` unless `passWithNoTests`. Config, collection, and
+ * selection failures throw the same classified error `run` records. Each
+ * call imports the test files again, so a later call sees an edit.
  */
-export async function list(options: ListOptions = {}): Promise<{ pairs: ListedPair[] }> {
+export async function list(options: ListOptions = {}): Promise<ListResult> {
   const cwd = options.cwd ?? process.cwd();
   const env = options.env ?? process.env;
-  const config = await loadRunConfig(options, cwd, env, options.output === undefined ? {} : { output: options.output });
-  const collection = await collect(config, options.files);
+  const runOptions = toSelectionRunOptions(options);
+  const config = await loadRunConfig(
+    runOptions,
+    cwd,
+    env,
+    runOptions.output === undefined ? {} : { output: runOptions.output },
+  );
+  const collection = await collect(config, runOptions.files);
   const selection = select(
     collection,
     config,
-    (await selectionInputs(options, config)).filters,
-    options.passWithNoTests !== undefined ? { passWithNoTests: options.passWithNoTests } : {},
+    (await selectionInputs(runOptions, config)).filters,
+    runOptions.passWithNoTests !== undefined ? { passWithNoTests: runOptions.passWithNoTests } : {},
   );
-  const pairs: ListedPair[] = [];
-  for (const pair of selection.pairs) {
-    if (pair.disposition === 'filtered') continue;
-    pairs.push({
-      file: pair.test.file,
-      title: pair.test.title,
-      titlePath: pair.test.titlePath,
-      kind: pair.test.kind,
-      tags: pair.test.tags,
-      target: pair.target.name,
-      disposition: pair.disposition,
-      ...(pair.skip === undefined ? {} : { skipReason: pair.skip.reason }),
-    });
-  }
-  return { pairs };
+  return {
+    pairs: selection.pairs.map((pair) => toListedPair(config.projectRoot, pair)),
+    unmatched: collection.unmatchedPositionals,
+    targets: selection.perTarget.map((entry) => entry.target.name),
+  };
 }
 
 export interface RunOutcome {
@@ -335,6 +383,7 @@ export async function run(options: RunOptions = {}): Promise<RunOutcome> {
   if (options.noCache === true) cli.cache = 'off';
   if (options.strictCache === true) cli.cacheStrict = true;
   if (options.replayOnly === true) cli.replayOnly = true;
+  if (options.updateSnapshots === true) cli.updateSnapshots = true;
   if (options.output !== undefined) cli.output = options.output;
   if (options.trace !== undefined) cli.trace = options.trace;
   if (options.video !== undefined) cli.video = options.video;
@@ -1022,12 +1071,67 @@ interface SelectionInputs {
 }
 
 /**
+ * What `loadRunConfig`, `selectionInputs`, and `validateRunOptions` read.
+ * `run` passes `RunOptions`; `list` translates the public bag into these
+ * (`config` string to `configPath`, object to `rawConfig`, `targets` to `targetIds`).
+ */
+type SelectionRunOptions = Pick<
+  RunOptions,
+  | 'configPath'
+  | 'rawConfig'
+  | 'files'
+  | 'tags'
+  | 'tagMode'
+  | 'excludeTags'
+  | 'grep'
+  | 'grepInvert'
+  | 'lastFailed'
+  | 'shard'
+  | 'targetIds'
+  | 'passWithNoTests'
+  | 'output'
+  | 'maxFailures'
+  | 'repeatEach'
+>;
+
+/** The public `list` bag as the options config loading and selection already take. */
+function toSelectionRunOptions(options: ListOptions): SelectionRunOptions {
+  const { config, targets, ...rest } = options;
+  return {
+    ...rest,
+    ...(typeof config === 'string' ? { configPath: config } : {}),
+    ...(config !== undefined && typeof config !== 'string' ? { rawConfig: config } : {}),
+    ...(targets !== undefined ? { targetIds: targets } : {}),
+  };
+}
+
+/** One collected pair as `list` reports it: the report's result id at repeat 0, project-relative source. */
+function toListedPair(projectRoot: string, pair: TestTargetPair): ListedPair {
+  return {
+    id: resultId(pair.test.id, pair.target.name, pair.agent),
+    file: pair.test.file,
+    title: pair.test.title,
+    titlePath: pair.test.titlePath,
+    kind: pair.test.kind,
+    tags: pair.test.tags,
+    source: projectSource(projectRoot, pair.test.source, pair.test.file),
+    session: pair.options.session,
+    sessions: pair.test.sessions,
+    serialId: pair.test.serialId,
+    target: pair.target.name,
+    agent: pair.agent,
+    disposition: pair.disposition,
+    ...(pair.skip === undefined ? {} : { reason: pair.skip.reason }),
+  };
+}
+
+/**
  * The selection filters the options ask for. `--last-failed` reads the
  * previous run's report here, before collection is judged, so a missing
  * report is a collection-phase failure like any other selection error; the
  * report itself reaches the reporters as `FinishedRun.lastRun`.
  */
-async function selectionInputs(options: ListOptions, config: ResolvedConfig): Promise<SelectionInputs> {
+async function selectionInputs(options: SelectionRunOptions, config: ResolvedConfig): Promise<SelectionInputs> {
   const lastRun =
     options.lastFailed === true ? await readLastRun(outputLayout(config.output).report) : undefined;
   const filters: SelectionFilters = {
@@ -1049,15 +1153,14 @@ async function selectionInputs(options: ListOptions, config: ResolvedConfig): Pr
  * `INVALID_CONFIG` rather than a run that stops at its first failure or
  * runs each test once.
  */
-function validateRunOptions(options: ListOptions): void {
-  const given = options as RunOptions;
-  positiveInt(given.maxFailures, 'maxFailures');
-  positiveInt(given.repeatEach, 'repeatEach');
+function validateRunOptions(options: SelectionRunOptions): void {
+  positiveInt(options.maxFailures, 'maxFailures');
+  positiveInt(options.repeatEach, 'repeatEach');
 }
 
 /** Resolves the run's config: a supplied value, or the discovered file. */
 async function loadRunConfig(
-  options: ListOptions,
+  options: SelectionRunOptions,
   cwd: string,
   env: NodeJS.ProcessEnv,
   cli: CliOverrides,

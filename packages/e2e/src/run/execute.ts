@@ -36,6 +36,7 @@ import { createEngineSession } from '../engine/session.ts';
 import { createExtendedFixtures } from './extended-fixtures.ts';
 import { captureFailureEvidence } from './failure-evidence.ts';
 import { createFixtures, type ArtifactSink } from './fixtures.ts';
+import { WrittenScreenshots } from './screenshots.ts';
 import { publishAttempt } from '../expect/attempt.ts';
 import { PollScope, runInPollScope } from '../expect/poll-scope.ts';
 import { SoftFailures } from '../expect/soft.ts';
@@ -194,10 +195,13 @@ export class TargetExecutor implements SerialHost {
   private readonly storedRecordings: StoredRecordings | undefined;
   /** Resolves once the engine's init hook completed for this worker. */
   private engineReady: Promise<void> | undefined;
+  /** The stored screenshots the run wrote, so no comparison passes against one nobody reviewed. */
+  private readonly writtenScreenshots: WrittenScreenshots;
 
   constructor(private readonly options: TargetExecutorOptions) {
     this.target = options.target;
     this.artifactsRoot = options.artifactsRoot;
+    this.writtenScreenshots = new WrittenScreenshots(options.artifactsRoot);
     this.rerunDir = options.rerunDir;
     this.interruptSignal = options.interruptSignal;
     this.debug = options.debug ?? new DebugTrace(false);
@@ -1024,6 +1028,7 @@ export class TargetExecutor implements SerialHost {
         ...(cache === undefined ? {} : { cache }),
         debug: this.debug,
         models: this.models,
+        test: { file: pair.test.file, titlePath: pair.test.titlePath, writtenScreenshots: this.writtenScreenshots },
       });
       // `expect.poll` and `expect.soft` take no fixture, so the attempt they
       // run on is published here and cleared when `attemptEnd` fires in `finally`.
@@ -1041,6 +1046,7 @@ export class TargetExecutor implements SerialHost {
         registered.fixtures,
         fixtures,
         this.target.engine?.name ?? 'none',
+        attemptAbort.signal,
       );
 
       /**
@@ -1071,8 +1077,10 @@ export class TargetExecutor implements SerialHost {
         try {
           enter('beforeEach');
           await extended.setUp();
+          attemptAbort.signal.throwIfAborted();
           for (const hook of beforeEachHooks) {
             await hook.fn(fixtures);
+            attemptAbort.signal.throwIfAborted();
           }
           enter('body');
           await (registered.fn as SetupFn)(fixtures);

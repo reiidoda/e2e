@@ -188,6 +188,12 @@ interface NodeBinding {
  */
 const DEFAULT_TRANSITION_MS = 500;
 
+/** How one screenshot is taken. */
+interface ScreenshotCapture {
+  /** The status bar in a fixed state (time, battery, signal), for a screenshot compared against a stored one (`comparable`). */
+  readonly normalizeStatusBar?: boolean;
+}
+
 /** The centre of a rect in logical pixels. */
 function centreOf(rect: Rect): { x: number; y: number } {
   return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
@@ -970,7 +976,7 @@ export class AgentDeviceSurface {
     this.generation = new Map(projected.index.map((entry) => [entry.id, this.bind(entry, projected.index)]));
     const viewport = await this.viewportFor(projected, operation.signal);
     const location = screenLocation(raw.appBundleId ?? raw.appName ?? this.appIdentity, screenTitle(projected));
-    const capture = options?.pixels === true ? await this.capturePixels(operation, projected, viewport) : undefined;
+    const capture = options?.pixels === true ? await this.capturePixels(operation, projected, viewport, { normalizeStatusBar: options.comparable === true }) : undefined;
     return {
       root: screenRoot(projected.roots, viewport),
       viewport,
@@ -1463,8 +1469,8 @@ export class AgentDeviceSurface {
   }
 
   /** Raw device pixels; cleanup follows the capture even when its caller abandons it. */
-  private rawScreenshot(signal?: AbortSignal): Promise<Uint8Array> {
-    return this.captureScreenshot(signal, async (shot, file) => new Uint8Array(readFileSync(shot.path ?? file)));
+  private rawScreenshot(signal?: AbortSignal, capture: ScreenshotCapture = {}): Promise<Uint8Array> {
+    return this.captureScreenshot(signal, async (shot, file) => new Uint8Array(readFileSync(shot.path ?? file)), capture);
   }
 
   /**
@@ -1475,12 +1481,13 @@ export class AgentDeviceSurface {
   private captureScreenshot<T>(
     signal: AbortSignal | undefined,
     read: (shot: RawScreenshotResult, file: string) => Promise<T>,
+    capture: ScreenshotCapture = {},
   ): Promise<T> {
     return this.command('screenshot', async (client) => {
       const directory = mkdtempSync(path.join(tmpdir(), 'e2e-agent-device-'));
       const file = path.join(directory, 'screenshot.png');
       try {
-        return await read(await client.capture.screenshot({ path: file }), file);
+        return await read(await client.capture.screenshot({ path: file, ...(capture.normalizeStatusBar === true ? { normalizeStatusBar: true } : {}) }), file);
       } finally {
         rmSync(directory, { recursive: true, force: true });
       }
@@ -1520,10 +1527,11 @@ export class AgentDeviceSurface {
     operation: OperationContext,
     projected: ProjectedSnapshot,
     viewport: ViewportSize,
+    capture: ScreenshotCapture,
   ): Promise<{ pixels: ObservationPixels; masked: number } | undefined> {
     let raw: Uint8Array;
     try {
-      raw = await this.rawScreenshot(operation.signal);
+      raw = await this.rawScreenshot(operation.signal, capture);
     } catch {
       return undefined;
     }

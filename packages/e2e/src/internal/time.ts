@@ -59,7 +59,11 @@ export const POLL_INTERVAL_MS = 100;
  * bare one.
  */
 export function cutOffAtDeadline(cause: unknown, startedWithMs: number): boolean {
-  if (startedWithMs >= POLL_INTERVAL_MS) return false;
+  return startedWithMs < POLL_INTERVAL_MS && isOperationTimeout(cause);
+}
+
+/** Whether `cause` is the engine's `OPERATION_TIMEOUT`, bare or wrapped by the locator failure it was translated into. */
+export function isOperationTimeout(cause: unknown): boolean {
   const engineError = asEngineError(cause) ?? asEngineError(cause instanceof Error ? cause.cause : undefined);
   return engineError?.code === 'OPERATION_TIMEOUT';
 }

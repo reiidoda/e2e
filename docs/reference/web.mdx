@@ -648,6 +648,8 @@ const file = await browser.waitForDownload(() =>
 );
 ```
 
+A handler that throws before answering has its dialog dismissed, and its error fails the next step.
+
 ### keyboard and mouse
 
 Both namespaces are viewport-level. Prefer `locator.press` and

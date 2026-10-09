@@ -250,10 +250,12 @@ https://tester.army/e2e` with `X-Title: e2e` attribute the traffic to e2e on
 the Vercel AI Gateway and OpenRouter. These replace the same headers set on
 the provider instance.
 
-**OpenAI and Azure OpenAI.** Every request carries `store: false` and a
-prompt cache key. The provider keeps no copy of the conversation, a
-reasoning model's earlier turns travel inline as encrypted content, and the
-prompt cache still serves the repeated prefix. Organizations with zero data
+**OpenAI and Azure OpenAI.** Every request to a Responses model
+(`openai(...)`, `azure(...)`, or `openai/*` on the gateway) carries
+`store: false` and a prompt cache key; Chat Completions models and
+OpenAI-compatible providers get neither. The provider keeps no copy of the
+conversation, a reasoning model's earlier turns travel inline as encrypted
+content, and the prompt cache still serves the repeated prefix. Organizations with zero data
 retention need no configuration. To keep stored responses, set `store` in
 `providerOptions`; the key is `azure` for Azure OpenAI:
 

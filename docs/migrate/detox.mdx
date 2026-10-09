@@ -135,6 +135,7 @@ The password comes from [configured credentials](/authentication).
 | `device.setStatusBar`, `device.setURLBlacklist` | No equivalent |
 | `device.disableSynchronization()` | No equivalent. e2e waits through actions and retrying assertions. |
 | `device.takeScreenshot()` | `app.screenshot('label')`, subject to the secret policy |
+| `device.takeScreenshot()` compared with an image snapshot library | `await expect(screen).toHaveScreenshot('name.png')`; the status bar is held fixed for it. See [Visual comparison](/visual-testing) |
 | `:ios:` / `:android:` in a test name | `{ platforms: ['ios'] }` on the test |
 
 Where the behavior differs from Detox's:

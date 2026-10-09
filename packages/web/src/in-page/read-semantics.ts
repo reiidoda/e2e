@@ -61,18 +61,18 @@ export const readSemanticsFunction = <Mode extends SemanticMode>(
 
   /**
    * How the active mode projects one node, expressed as data so `describe`
-   * stays branch-free. Tree mode is the model-bound projection: bounded text,
-   * a bounded attribute projection, hrefs reduced to origin+path, the root
-   * document named by its title, and no value on a checkbox or radio, whose
-   * value attribute is an app token its checked state already says more
-   * than. Node mode is the full locator-read surface.
+   * stays branch-free. Tree mode is the model-bound projection: bounded line
+   * text (`lineTextOf`), a bounded attribute projection, hrefs reduced to
+   * origin+path, the root document named by its title, and no value on a
+   * checkbox or radio, whose value attribute is an app token its checked
+   * state already says more than. Node mode is the full locator-read surface.
    */
   const projection: {
     attributes: readonly string[] | null;
     textLimit: number | null;
     nameLimit: number | null;
     redactHref: boolean;
-    directTextOnly: boolean;
+    lineText: boolean;
     documentRoot: boolean;
     checkableValue: boolean;
   } =
@@ -82,7 +82,7 @@ export const readSemanticsFunction = <Mode extends SemanticMode>(
           textLimit: options.mode.textLimit,
           nameLimit: options.mode.nameLimit,
           redactHref: true,
-          directTextOnly: true,
+          lineText: true,
           documentRoot: true,
           checkableValue: false,
         }
@@ -91,7 +91,7 @@ export const readSemanticsFunction = <Mode extends SemanticMode>(
           textLimit: null,
           nameLimit: null,
           redactHref: false,
-          directTextOnly: false,
+          lineText: false,
           documentRoot: false,
           checkableValue: true,
         };
@@ -131,7 +131,14 @@ export const readSemanticsFunction = <Mode extends SemanticMode>(
    * HTML-AAM scopes it to sectioning content and to the ARIA roles that stand
    * for it, so a `<div role="article">` scopes it like an `<article>`.
    */
-  const isPageLevel = (el: Element): boolean => el.closest(SECTIONING_SCOPE) === null;
+  const isPageLevel = (el: Element): boolean => {
+    for (let candidate: Element | null = el; candidate !== null;) {
+      if (candidate.closest(SECTIONING_SCOPE) !== null) return false;
+      const root = candidate.getRootNode();
+      candidate = root instanceof ShadowRoot ? root.host : null;
+    }
+    return true;
+  };
 
   /**
    * The root of a contenteditable region: editable itself, under a parent that
@@ -710,6 +717,119 @@ export const readSemanticsFunction = <Mode extends SemanticMode>(
     return out.replace(/\s+/g, ' ').trim();
   });
 
+  /**
+   * Elements whose content is not text in a line: a form control's options
+   * or value, a picture, a frame, a drawn surface. Like a line break, each
+   * separates the words around it.
+   */
+  const LINE_BREAKING_TAGS = [...SKIP_TAGS, ...OPAQUE_TAGS, 'iframe', 'img', 'input', 'select', 'textarea', 'br'];
+
+  /**
+   * True when an element's text flows in its parent's line: a visible
+   * inline-level box (`inline`, `inline-block`, `ruby`), or `display:
+   * contents`, whose children lay out as the parent's own. Visible as the
+   * walk reads it (`isHidden`): a box with no size shows no words. A slot
+   * has no box and shows the nodes assigned to it, so only its visibility
+   * counts: a hidden one hides the text they inherit it with, and a child
+   * that shows itself again is listed on its own.
+   */
+  const flowsInLine = memoized((el: Element): boolean => {
+    if (LINE_BREAKING_TAGS.indexOf(el.tagName.toLowerCase()) !== -1 || isEditingHost(el)) return false;
+    const style = styleOf(el);
+    if (style === undefined || hidesSubtree(el, style)) return false;
+    if (el instanceof HTMLSlotElement ? style.visibility !== 'visible' : isHidden(el, style)) return false;
+    return isInlineLevel(style);
+  });
+
+  /** True for a box laid out in its parent's line, or for `display: contents`, which lays out none of its own. */
+  const isInlineLevel = (style: CSSStyleDeclaration): boolean =>
+    style.display.startsWith('inline') || style.display.startsWith('ruby') || style.display === 'contents';
+
+  /**
+   * The nodes an element renders in its place, as the walk reaches them: a
+   * shadow host's shadow tree (a closed one through the record), a slot's
+   * assigned nodes or else its fallback content, any other element's children.
+   */
+  const renderedChildrenOf = (el: Element): Node[] => {
+    const shadow = shadowRootOf(el);
+    if (shadow !== null) return Array.from(shadow.childNodes);
+    if (el instanceof HTMLSlotElement) {
+      const assigned = el.assignedNodes();
+      if (assigned.length > 0) return assigned;
+    }
+    return Array.from(el.childNodes);
+  };
+
+  /**
+   * An element's rendered text with each inline descendant's text in place.
+   * Anything else in the line reads as a space, except a hidden inline
+   * element (a `<wbr>`, a zero-size span), which shows nothing.
+   */
+  const lineRunOf = (el: Element): string => {
+    let out = '';
+    for (const child of renderedChildrenOf(el)) {
+      if (child.nodeType === 3) out += child.nodeValue ?? '';
+      if (child.nodeType !== 1) continue;
+      const inner = child as Element;
+      if (flowsInLine(inner)) {
+        out += lineRunOf(inner);
+        continue;
+      }
+      const style = styleOf(inner);
+      if (style === undefined || hidesSubtree(inner, style)) continue;
+      const breaking = LINE_BREAKING_TAGS.indexOf(inner.tagName.toLowerCase()) !== -1;
+      if (breaking || !isInlineLevel(style) || !isHidden(inner, style)) out += ' ';
+    }
+    return out;
+  };
+
+  /**
+   * The text an element owns, read as a person reads its line: its own text
+   * with every inline descendant's text in place, so `<p>Read our <a>privacy
+   * policy</a> for details.</p>` reads as the whole sentence while the link
+   * stays a node of its own. Block-level descendants are nodes of their own
+   * and only separate words. An element with no text of its own owns none: a
+   * wrapper of elements leaves them to say what they say (`ownsLine`).
+   */
+  const lineTextOf = memoized((el: Element): string =>
+    ownsLine(el) ? lineRunOf(el).replace(/\s+/g, ' ').trim() : '');
+
+  /**
+   * True when an element reads its own line: it has text of its own, or it
+   * offers an action inside an ancestor's line, where its words are what a
+   * person aims at.
+   */
+  const ownsLine = (el: Element): boolean => directTextOf(el) !== '' || (offersAction(el) && isReadInLine(el));
+
+  /**
+   * True when an element with no role still says it can be acted on: it is
+   * focusable through `tabindex`, it has a click handler set as an attribute
+   * or a property (`onclick`), or it is an `<a>` with no `href`, which an app
+   * wires up by script. Such an element stays listed inside a line, so it
+   * keeps an id to act on. A handler added with `addEventListener` leaves
+   * nothing the page can read.
+   */
+  const offersAction = memoized((el: Element): boolean => {
+    const tabindex = el.getAttribute('tabindex');
+    if (tabindex !== null && /^\s*[-+]?\d/.test(tabindex)) return true;
+    if (el.tagName.toLowerCase() === 'a' || el.hasAttribute('onclick')) return true;
+    return el instanceof HTMLElement && el.onclick !== null;
+  });
+
+  /**
+   * True when an element's text is already read in an ancestor's line
+   * (`lineTextOf`), so the element has nothing to add on text alone. A line
+   * longer than the projection's text bound is cut, so its inline
+   * descendants stay listed and nothing past the cut is lost.
+   */
+  const isReadInLine = memoized((el: Element): boolean => {
+    const parent = el.assignedSlot ?? parentOrHostOf(el);
+    if (parent === null || !flowsInLine(el)) return false;
+    if (!ownsLine(parent)) return isReadInLine(parent);
+    const fits = projection.textLimit === null || lineTextOf(parent).length <= projection.textLimit;
+    return fits && !isHidden(parent);
+  });
+
   const accessibleName = memoized((el: Element): string | null => {
     // accname reads a labelledby reference (2B) before the element's own aria-label (2C).
     const referenced = referencedNamesOf(el, nameWalk([], true));
@@ -1233,7 +1353,7 @@ export const readSemanticsFunction = <Mode extends SemanticMode>(
 
     let text: string;
     if (secure) text = '';
-    else if (projection.directTextOnly) text = directTextOf(el);
+    else if (projection.lineText) text = lineTextOf(el);
     else text = textOf(el);
     if (projection.textLimit !== null) text = text.slice(0, projection.textLimit);
 
@@ -1325,7 +1445,8 @@ export const readSemanticsFunction = <Mode extends SemanticMode>(
     if (el.hasAttribute(options.testIdAttribute)) return true;
     if (implicitRole(el) !== null && !isPresentational(el)) return true;
     if (accessibleName(el) !== null) return true;
-    return directTextOf(el) !== '';
+    if (offersAction(el) && isReadInLine(el)) return lineTextOf(el) !== '';
+    return directTextOf(el) !== '' && !isReadInLine(el);
   };
 
   const walk = (el: Element, parent: number): void => {

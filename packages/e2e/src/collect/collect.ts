@@ -16,8 +16,8 @@ import {
   type GroupNode,
   type ModuleRegistration,
   type RegisteredTest,
-  type SourceLocation,
 } from './registry.ts';
+import type { SourceLocation } from '../internal/source.ts';
 
 /**
  * Everything needed to name and report a test, with no executable or realm

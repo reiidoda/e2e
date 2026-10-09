@@ -162,7 +162,7 @@ declares `requires: ['device']` so other targets skip it. `Status` is `same`,
 | `assertVisible: { checked, selected, focused }` | `.toBeChecked()`, `.toBeSelected()`, `.toBeFocused()` | renamed |
 | `assertTrue: ${...}` | `expect(value).toBe(true)`, or `expect.poll` for a value that is still changing | renamed |
 | `extendedWaitUntil: { visible, timeout }` | `.toBeVisible({ timeout })` | renamed |
-| `assertScreenshot: { path, thresholdPercentage }` | not yet; `agent.assert('...', { vision: true })` is a judgment, not a pixel diff | missing |
+| `assertScreenshot: { path, thresholdPercentage }` | `await expect(screen).toHaveScreenshot(name, { maxDiffPixelRatio })`, stored beside the test and written on the first run; see [Visual comparison](/visual-testing) | renamed |
 | `assertDarkMode`, `assertLightMode` | not yet; assert on a themed control | missing |
 | `retry: { maxRetries, commands }` | `expect.poll` for a value, `{ retries }` on the test for the flow | renamed |
 | `takeScreenshot` | `app.screenshot('label')`, redacted, withheld after a secret fill | renamed |

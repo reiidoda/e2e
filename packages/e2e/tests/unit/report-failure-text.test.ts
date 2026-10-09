@@ -113,6 +113,25 @@ describe('renderTracePage', () => {
     return renderTracePage(document, failing, outcome(failing, NO_GROUPS), { artifactsDir: '.e2e/artifacts', readArtifact });
   };
 
+  it('lists the screenshots a step attached under that step, and no other artifact', () => {
+    const image = (id: string, file: string) => ({ id, kind: 'screenshot' as const, mediaType: 'image/png', path: `t/screenshots/${file}`, redaction: 'complete' as const, producer: { kind: 'step' as const, stepId: 's1' } });
+    const log = { id: 'a:3', kind: 'log' as const, mediaType: 'text/plain', path: 't/console.txt', redaction: 'complete' as const, producer: { kind: 'step' as const, stepId: 's1' } };
+    const body = page([
+      failed({
+        steps: [step({ index: 0 }), step({ index: 1, api: 'expect.toHaveScreenshot', status: 'failed', artifacts: ['a:0', 'a:1', 'a:2', 'a:3'] })],
+        artifacts: [image('a:0', 'home-expected.png'), image('a:1', 'home-actual.png'), image('a:2', 'home-diff.png'), log],
+      }),
+    ]);
+    const lines = body.split('\n');
+    const at = lines.findIndex((line) => line.includes('`expect.toHaveScreenshot`'));
+    expect(lines.slice(at + 1, at + 4)).toEqual([
+      '   - screenshot `.e2e/artifacts/t/screenshots/home-expected.png`',
+      '   - screenshot `.e2e/artifacts/t/screenshots/home-actual.png`',
+      '   - screenshot `.e2e/artifacts/t/screenshots/home-diff.png`',
+    ]);
+    expect(lines[at + 4]).not.toContain('console.txt');
+  });
+
   it('quotes a step explanation that starts like a heading as prose, with its linkable tokens as code, through the shared cell', () => {
     const body = page([
       failed({

@@ -154,10 +154,10 @@ what to do today.
 | --- | --- | --- |
 | `locator.click()` | `locator.tap()`; `click()` is an alias | same |
 | `click({ button: 'right' })` | `secondaryTap()` | renamed |
-| `dblclick()` | `doubleTap()` | renamed |
+| `dblclick()` | `doubleTap()`; `dblclick()` is an alias | same |
 | `click({ position })` | `tap({ position })`, an offset from the node's top-left corner | renamed |
 | `click({ force })` | not yet; `tap({ position })` skips every actionability check but the scroll into view | missing |
-| `click({ modifiers })`, `dblclick({ modifiers })` | `tap({ modifiers })`, `doubleTap({ modifiers })`, `secondaryTap({ modifiers })`; not beside `position` yet | same |
+| `click({ modifiers })`, `dblclick({ modifiers })` | `tap({ modifiers })`, `doubleTap({ modifiers })` or `dblclick({ modifiers })`, `secondaryTap({ modifiers })`; not beside `position` yet | same |
 | `click({ clickCount, delay, trial })` | not yet | missing |
 | `{ trial }`, `{ force }`, `{ noWaitAfter }` on `check()`, `fill()`, and the other actions | not yet; an option the action does not name is `INVALID_ARGUMENT` before the node resolves, never ignored | missing |
 | `fill(value)` | the same; also takes a `Secret` | same |
@@ -206,7 +206,9 @@ what to do today.
 | `expect(locator).toHaveClass(cls)` | `expect(browser).toHaveClass(locator, cls)`; a DOM fact is asserted through `browser`; reads the `class` attribute, so `''` matches `class=""` and not a missing attribute | web only |
 | `toHaveCSS()`, `toHaveId()`, `toHaveJSProperty()`, `toContainClass()`, `toHaveValues()` | not yet; `browser.evaluate` plus a value matcher | missing |
 | `expect(page).toHaveURL()`, `toHaveTitle()` | `expect(browser).toHaveURL()`, `toHaveTitle()`; `toHaveURL` takes `ignoreCase` | web only |
-| `toHaveScreenshot()`, `toMatchSnapshot()` | not yet; `agent.assert('...', { vision: true })` is a judgment, not a pixel diff | missing |
+| `expect(page).toHaveScreenshot()`, `expect(locator).toHaveScreenshot()` | `expect(screen).toHaveScreenshot()`, `expect(locator).toHaveScreenshot()` on every target, a device included, with `threshold`, `maxDiffPixels`, `maxDiffPixelRatio`, `mask`, `maskColor`, and `timeout`; stored as `<file>-snapshots/<name>-<target>-<os>.png`. See [Visual comparison](/visual-testing) | same |
+| `toHaveScreenshot({ fullPage, clip, animations, caret, scale, stylePath })` | not yet; the viewport, at CSS scale, animations stopped and the caret hidden | missing |
+| `toMatchSnapshot()` | not yet | missing |
 | `toMatchAriaSnapshot()` | not yet | missing |
 | `expect(value).toBe()`, `toEqual()`, `toMatch()`, `toBeTruthy()`, `toBeCloseTo()` and the rest | the same, except `toContain`, below, see [value matchers](/reference/expect#value-matchers) | same |
 | `expect(collection).toContain()` | compares items by deep equality, as `toContainEqual` does in Playwright: `toContain({ id: 1 })` passes on `[{ id: 1 }]`, where Playwright's strict match fails. Containment in a string is the same | by design |
@@ -307,7 +309,7 @@ what to do today.
 | `--trace <mode>` | `--trace [mode]`, the same modes; a bare `--trace` is `on` | same |
 | `--last-failed`, `--shard`, `--repeat-each`, `--max-failures` | the same names; `--shard` keeps serial groups together | same |
 | `--quiet` | not yet | missing |
-| `--update-snapshots` | no equivalent; there is no pixel assertion | missing |
+| `-u`, `--update-snapshots` | the same; rewrites the stored screenshots that differ | same |
 | `--list` | `npx e2e list`, with the same selection flags | renamed |
 | `npx playwright codegen` | `npx e2e explore` walks the app from a goal and reports what it found; `npx e2e mcp` gives a coding agent a live session so it writes the test while driving the app, see [Coding agents](/coding-agents) | renamed |
 | `npx playwright show-trace` | no viewer; open the `trace.md` under `.e2e/results/` that the terminal names | by design |

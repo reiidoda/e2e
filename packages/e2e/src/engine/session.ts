@@ -361,6 +361,7 @@ export function createEngineSession(options: EngineSessionOptions): TargetSessio
         {
           ...(observeOptions?.pixels === true ? { pixels: true } : {}),
           ...(observeOptions?.pixelFallback === true ? { pixelFallback: true } : {}),
+          ...(observeOptions?.comparable === true ? { comparable: true } : {}),
         },
       );
       const minted = `${OBSERVE_REVISION_PREFIX}${revision + 1}`;

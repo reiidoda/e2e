@@ -4,6 +4,7 @@ import { chromium, type Browser, type ElementHandle, type Page } from 'playwrigh
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { SemanticNode } from 'e2e/engine';
 import { captureDocument } from '../../src/observation.ts';
+import { CLOSED_SHADOW_ROOTS_INIT_SCRIPT } from '../../src/closed-shadow.ts';
 
 let browser: Browser;
 let page: Page;
@@ -57,6 +58,30 @@ const PIXEL = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAAAAAAALAAAAAA
 const EMPTY_BOXES = '[data-testid]:empty { min-width: 1px; min-height: 1px }';
 
 describe('role mapping', () => {
+  it.each(['open', 'closed'] as const)('scopes nested shadow landmarks to their outer article (%s)', async (mode) => {
+    await page.setContent('<article><div id="card"></div></article><div id="page"></div>');
+    await page.evaluate(CLOSED_SHADOW_ROOTS_INIT_SCRIPT);
+    await page.evaluate((shadowMode) => {
+      const card = document.querySelector('#card')!.attachShadow({ mode: shadowMode });
+      card.innerHTML = '<div id="nested"></div>';
+      card.querySelector('#nested')!.attachShadow({ mode: shadowMode }).innerHTML =
+        '<header aria-label="Card" data-testid="card-header">Card</header><footer aria-label="Card footer" data-testid="card-footer">Foot</footer>';
+      document.querySelector('#page')!.attachShadow({ mode: shadowMode }).innerHTML =
+        '<header aria-label="Page" data-testid="page-header">Page</header><footer aria-label="Page footer" data-testid="page-footer">Legal</footer>';
+    }, mode);
+    const nodes = await rolesByTestId();
+    expect(nodes.get('card-header')).toBeDefined();
+    expect(nodes.get('card-footer')).toBeDefined();
+    expect(nodes.get('card-header')?.role).toBeUndefined();
+    expect(nodes.get('card-footer')?.role).toBeUndefined();
+    expect(nodes.get('page-header')?.role).toBe('banner');
+    expect(nodes.get('page-footer')?.role).toBe('contentinfo');
+    if (mode === 'open') {
+      expect(await page.getByRole('banner').count()).toBe(1);
+      expect(await page.getByRole('contentinfo').count()).toBe(1);
+    }
+  });
+
   it('reports ARIA img as image, alongside the img element', async () => {
     await page.setContent(`
       <style>${EMPTY_BOXES}</style>
