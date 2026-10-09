@@ -421,10 +421,11 @@ before the next action lands on it.
 
 `closeApp` terminates the app the session is on and ends the session, so
 `openApp` after it launches the app fresh, on its first screen; a screen
-query or `foregroundApp` in between is `APP_NOT_OPEN`. `foregroundApp` on
-iOS reads the session, not the device: agent-device's `appstate` has no
-device-level answer there, so after `home()` it still names the app the
-session opened. Android reads the device's foreground activity.
+query in between is `APP_NOT_OPEN`. `foregroundApp` on iOS reads the
+session, not the device: agent-device's `appstate` has no device-level
+answer there, so after `home()` it still names the app the session opened,
+and after `closeApp` it is `APP_NOT_OPEN`. Android reads the device's
+foreground activity.
 
 `installApp` installs a build from inside a test or a fixture: the run's build once per device (no path installs `app.appPath`), or another build for an upgrade path. A plain
 install keeps the app's data; `reinstall: true` removes the app named by
