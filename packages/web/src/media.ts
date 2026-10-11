@@ -43,8 +43,10 @@ export function mediaLabel(media: unknown): string {
   }).join(', ');
 }
 
-/** A refused value as a message shows it: strings quoted, everything else by its JSON or type. */
+/** A refused value as a message shows it: a string quoted, another primitive as written, anything else by its kind, never serialized. */
 function describe(value: unknown): string {
-  if (typeof value === 'function' || typeof value === 'symbol' || typeof value === 'bigint') return typeof value;
-  return JSON.stringify(value) ?? String(value);
+  if (typeof value === 'string') return JSON.stringify(value);
+  if (value === null || typeof value === 'number' || typeof value === 'boolean') return String(value);
+  if (Array.isArray(value)) return 'an array';
+  return typeof value === 'object' ? 'an object' : typeof value;
 }

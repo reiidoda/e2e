@@ -263,10 +263,10 @@ export class AttemptSession {
    * attempt opens after it; a feature `media` leaves out keeps its value.
    */
   async emulateMedia(media: WebMedia): Promise<void> {
-    const next = { ...this.media, ...media };
+    // Merged before the await, so a second call made meanwhile builds on this one instead of the old value.
+    this.media = { ...this.media, ...media };
     const page = this.current().page;
-    if (page !== null && !page.isClosed()) await page.emulateMedia(next);
-    this.media = next;
+    if (page !== null && !page.isClosed()) await page.emulateMedia(this.media);
   }
 
   /** Sets the attempt's media features on a page before it shows anything; a page with none set keeps the browser's own. */

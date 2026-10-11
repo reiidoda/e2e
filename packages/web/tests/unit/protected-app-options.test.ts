@@ -126,6 +126,16 @@ describe('web({ colorScheme, reducedMotion })', () => {
       refused('web({ reducedMotion }) must be "reduce" or "no-preference", got true'),
     );
     expect(() => web({ reducedMotion: null } as unknown as WebOptions)).toThrow(refused('web({ reducedMotion }) must be "reduce" or "no-preference", got null'));
+    // A value no message could serialize still gets the configuration error, not a TypeError.
+    const circular: Record<string, unknown> = {};
+    circular['self'] = circular;
+    expect(() => web({ colorScheme: circular } as unknown as WebOptions)).toThrow(
+      refused('web({ colorScheme }) must be "light", "dark", or "no-preference", got an object'),
+    );
+    expect(() => web({ colorScheme: ['dark'] } as unknown as WebOptions)).toThrow(
+      refused('web({ colorScheme }) must be "light", "dark", or "no-preference", got an array'),
+    );
+    expect(() => web({ reducedMotion: 10n } as unknown as WebOptions)).toThrow(refused('web({ reducedMotion }) must be "reduce" or "no-preference", got bigint'));
   });
 });
 

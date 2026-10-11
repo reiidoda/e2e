@@ -194,6 +194,38 @@ describe('AttemptSession', () => {
     await owner.close(cleanup());
   });
 
+  it('keeps both concurrent media changes when the first call finishes last', async () => {
+    const current = remote('current');
+    const active = target('page');
+    const applied: WebMedia[] = [];
+    const firstResponse = deferred<void>();
+    let calls = 0;
+    // The first call settles last, as a slow protocol round trip would.
+    Object.assign(active.page, { emulateMedia: async (media: WebMedia) => {
+      calls += 1;
+      if (calls === 1) await firstResponse.promise;
+      applied.push(media);
+    } });
+    current.pages.push(active.page);
+    vi.mocked(connectCdp).mockResolvedValue(current.browser);
+    const owner = session();
+    await owner.start(new AbortController().signal);
+    await owner.ensurePage();
+    const first = owner.emulateMedia({ colorScheme: 'dark' });
+    await owner.emulateMedia({ reducedMotion: 'reduce' });
+    firstResponse.resolve();
+    await first;
+    expect(applied).toContainEqual({ colorScheme: 'dark', reducedMotion: 'reduce' });
+    const opened = target('opened');
+    const emulateMedia = vi.fn(async () => undefined);
+    Object.assign(opened.page, { emulateMedia });
+    Object.assign(active.page, { isClosed: () => true });
+    current.pages.push(opened.page);
+    await owner.ensurePage();
+    expect(emulateMedia).toHaveBeenCalledWith({ colorScheme: 'dark', reducedMotion: 'reduce' });
+    await owner.close(cleanup());
+  });
+
   it('leaves the browser\'s own media alone when none is configured or requested', async () => {
     const current = remote('current');
     const active = target('page');
