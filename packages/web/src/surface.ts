@@ -12,6 +12,7 @@ import path from 'node:path';
 import type { Browser, BrowserContext, ElementHandle, FrameLocator, Locator, Page, Route } from 'playwright-core';
 import {
   EngineError,
+  obj,
   raceAbort,
   TestError,
   withinCleanupBudget,
@@ -53,6 +54,7 @@ import { maskOptions, secureFieldMasks } from './observe.ts';
 import { connectionAbort, withOperationDeadline, type OperationBound } from './operation-budget.ts';
 import { CLOSED_SHADOW_ROOTS_INIT_SCRIPT, CLOSED_SHADOW_ROOTS_KEY } from './closed-shadow.ts';
 import { ConfiguredInitScripts, type WebInitScript } from './init-scripts.ts';
+import type { WebMedia } from './media.ts';
 import { SECURE_FIELD_SELECTOR, type RawNodeData } from './read-node.ts';
 import { readSelector, takeReadsFunction } from './read-selector.ts';
 import { httpCredentials, installSiteHeaders, lowercaseNames, siteHeadersFor } from './protected-app.ts';
@@ -233,6 +235,21 @@ export interface WebOptions {
    */
   readonly timezoneId?: string;
   /**
+   * The `prefers-color-scheme` every page reports from its first paint, to
+   * its `@media` rules and to `matchMedia`, as Playwright's own
+   * `colorScheme` context option sets it. Defaults to the browser's own.
+   * `browser.emulateMedia` changes it for the rest of one attempt.
+   */
+  readonly colorScheme?: WebMedia['colorScheme'];
+  /**
+   * The `prefers-reduced-motion` every page reports from its first paint, as
+   * Playwright's own `reducedMotion` context option sets it: `'reduce'`
+   * lets an app's own rule turn its animations off, so none races an
+   * assertion. Defaults to the browser's own. `browser.emulateMedia`
+   * changes it for the rest of one attempt.
+   */
+  readonly reducedMotion?: WebMedia['reducedMotion'];
+  /**
    * Scripts every document runs before the page's own, in every tab and
    * frame: JavaScript source, a `{ path }` relative to the project root, or a
    * function, which cannot close over test variables.
@@ -267,6 +284,8 @@ export class PlaywrightSurface {
   private readonly userAgent: string | undefined;
   private readonly locale: string | undefined;
   private readonly timezoneId: string | undefined;
+  /** The configured media features, which every attempt starts from. */
+  private readonly media: WebMedia;
   private readonly configuredInitScripts: ConfiguredInitScripts;
   /** The attempt's init scripts, configured then added, applied to each context the attempt opens. */
   private initScripts: string[] = [];
@@ -299,6 +318,7 @@ export class PlaywrightSurface {
     this.userAgent = options.userAgent;
     this.locale = options.locale;
     this.timezoneId = options.timezoneId;
+    this.media = obj({ colorScheme: options.colorScheme, reducedMotion: options.reducedMotion });
     this.configuredInitScripts = new ConfiguredInitScripts(options.initScripts ?? []);
   }
 
@@ -458,6 +478,7 @@ export class PlaywrightSurface {
       artifactsDir: context.artifactsDir,
       viewport: this.viewport,
       screencast: this.screencast,
+      media: this.media,
       acquire: (signal) => this.acquireBrowser(signal),
       contextOptions: {
         viewport: this.viewport,
@@ -466,6 +487,8 @@ export class PlaywrightSurface {
         ...(this.userAgent === undefined ? {} : { userAgent: this.userAgent }),
         ...(this.locale === undefined ? {} : { locale: this.locale }),
         ...(this.timezoneId === undefined ? {} : { timezoneId: this.timezoneId }),
+        // On the context too, so a tab the app opens itself starts from the configured values.
+        ...this.media,
         ...(this.headers === undefined ? {} : { serviceWorkers: 'block' as const }),
       },
       configure: async (target) => {
@@ -630,6 +653,11 @@ export class PlaywrightSurface {
   /** Sizes the open page, or the one the next navigation opens, for the rest of the attempt. */
   setViewport(size: { readonly width: number; readonly height: number }): Promise<void> {
     return this.requireSession().setViewport(size);
+  }
+
+  /** Emulates media features on the open page, or the one the next navigation opens, for the rest of the attempt. */
+  emulateMedia(media: WebMedia): Promise<void> {
+    return this.requireSession().emulateMedia(media);
   }
 
   /**

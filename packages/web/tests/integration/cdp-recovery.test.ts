@@ -136,6 +136,28 @@ describe('CDP session recovery', () => {
     }
   }, 60_000);
 
+  it('emulates the configured and requested media on the persistent page, after reconnect too', async () => {
+    const remote = await host();
+    const engine = await start(
+      { cdpEndpoint: () => remote.endpoint, reconnectEndpoint: () => remote.endpoint },
+      { colorScheme: 'dark' },
+    );
+    const media = () => surfaceOf(engine)!.page().evaluate(() => ({
+      dark: matchMedia('(prefers-color-scheme: dark)').matches,
+      reduce: matchMedia('(prefers-reduced-motion: reduce)').matches,
+    }));
+    try {
+      await fixtureOf(engine).emulateMedia({ reducedMotion: 'reduce' });
+      expect(await media()).toEqual({ dark: true, reduce: true });
+      await surfaceOf(engine)!.context().browser()!.close();
+      expect((await engine.locate!(heading, operation()))[0]?.name).toBe('Login');
+      expect(await media()).toEqual({ dark: true, reduce: true });
+    } finally {
+      await engine.dispose!(cleanup());
+      await closeRemoteChrome(remote);
+    }
+  }, 60_000);
+
   it('runs configured and test init scripts once per document, after reconnect too', async () => {
     const remote = await host();
     const engine = await start(

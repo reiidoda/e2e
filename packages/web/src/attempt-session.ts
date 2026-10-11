@@ -6,6 +6,7 @@ import { connectionAbort, withConnectionBudget, withOperationDeadline, type Conn
 import { RefRegistry } from './refs.ts';
 import type { LeaseRecording } from './provider.ts';
 import { ProviderVideo } from './provider-video.ts';
+import type { WebMedia } from './media.ts';
 import { invalidState, translatePwError } from './support.ts';
 import type { WebScreencastOptions } from './surface.ts';
 import { VideoRecorder, type AttemptVideo } from './video.ts';
@@ -18,6 +19,8 @@ interface SessionOptions {
   readonly viewport: ViewportSize | null;
   /** How the engine's own screencast records, when the provider does not record. */
   readonly screencast: WebScreencastOptions;
+  /** The media features every page the attempt opens emulates, until `emulateMedia` changes them. */
+  readonly media: WebMedia;
   readonly contextOptions: BrowserContextOptions;
   readonly acquire: (signal: AbortSignal) => Promise<Browser>;
   readonly configure: (context: BrowserContext) => Promise<void>;
@@ -53,8 +56,10 @@ export class AttemptSession {
   /** Until the attempt's first page opens: a persistent browser's own first tab can serve as that page. */
   private firstPage = true;
   private requestedViewport: { readonly width: number; readonly height: number } | undefined;
+  private media: WebMedia;
 
   constructor(private readonly options: SessionOptions) {
+    this.media = options.media;
     this.video = options.record === undefined
       ? new VideoRecorder(options.artifactsDir, options.screencast)
       : new ProviderVideo(options.record, options.artifactsDir);
@@ -173,6 +178,8 @@ export class AttemptSession {
         if (recover && candidate.page !== null) {
           const size = previous?.page?.viewportSize() ?? this.requestedViewport ?? this.options.viewport;
           if (size !== null) await candidate.page.setViewportSize(size);
+          // Emulation belongs to the CDP session that set it, so the new transport sets it again.
+          await this.applyMedia(candidate.page);
           await this.video.pageOpened(candidate.page);
         }
         if (budget.signal.aborted) throw connectionAbort(budget.signal, 'connection');
@@ -206,6 +213,7 @@ export class AttemptSession {
       let identity = binding.identity;
       const size = this.requestedViewport ?? (identity === undefined ? null : this.options.viewport);
       if (size !== null) await page.setViewportSize(size);
+      await this.applyMedia(page);
       if (identity !== undefined) identity = { ...identity, target: await targetIdentity(page) };
       this.check(token);
       await this.video.pageOpened(page);
@@ -248,6 +256,22 @@ export class AttemptSession {
     const page = this.current().page;
     if (page !== null && !page.isClosed()) await page.setViewportSize({ width, height });
     this.requestedViewport = { width, height };
+  }
+
+  /**
+   * Emulates media features on the open page, if any, and every page this
+   * attempt opens after it; a feature `media` leaves out keeps its value.
+   */
+  async emulateMedia(media: WebMedia): Promise<void> {
+    const next = { ...this.media, ...media };
+    const page = this.current().page;
+    if (page !== null && !page.isClosed()) await page.emulateMedia(next);
+    this.media = next;
+  }
+
+  /** Sets the attempt's media features on a page before it shows anything; a page with none set keeps the browser's own. */
+  private async applyMedia(page: Page): Promise<void> {
+    if (Object.keys(this.media).length > 0) await page.emulateMedia(this.media);
   }
 
   /** Restarts the document while retaining this context's storage. */

@@ -20,6 +20,7 @@ import {
   describePattern,
   EngineError,
   matchesText,
+  obj,
   pollCondition,
   raceAbort,
   rejectUnknownOptions,
@@ -41,6 +42,7 @@ import { saveDownloadsTo, saveFromBrowser, saveLocally } from './downloads.ts';
 import { isTestErrorCode, message as causeMessage, translatePwError } from './support.ts';
 import { compileEvaluation, pageFunctionSource } from './evaluation.ts';
 import { initScriptLabel, testInitScriptSource } from './init-scripts.ts';
+import { MEDIA_KEYS, mediaLabel, mediaProblem, type WebMedia } from './media.ts';
 import { lowercaseNames } from './protected-app.ts';
 import { parseContinue, parseFulfill, requireNoArguments } from './route-options.ts';
 import { routePatternMatches, routePatternsEqual } from './route-pattern.ts';
@@ -245,6 +247,14 @@ export interface Browser extends Expectable<BrowserExpectation> {
   setCookies(cookies: readonly Cookie[]): Promise<void>;
   /** Sets the viewport size. */
   setViewport(size: { width: number; height: number }): Promise<void>;
+  /**
+   * Emulates CSS media features on the active tab and every tab the attempt
+   * opens after it, for the rest of the attempt, as Playwright's `page.emulateMedia`
+   * does: the page's `@media` rules and `matchMedia` both read them. A
+   * feature left out keeps its value. Works before the first navigation, so
+   * the page loads with them.
+   */
+  emulateMedia(media: WebMedia): Promise<void>;
   /** Registers an attempt-scoped dialog handler and returns an unsubscribe function. */
   onDialog(handler: DialogHandler): Promise<() => Promise<void>>;
   /** Runs a trigger and waits for its download. */
@@ -562,6 +572,19 @@ export function createBrowserFixture(surface: PlaywrightSurface, context: Engine
         await surface.setViewport(size);
         context.attachViewport({ width: size.width, height: size.height, scale: 1 });
       }),
+    async emulateMedia(media) {
+      if (typeof media !== 'object' || media === null) {
+        throw new TestError('INVALID_ARGUMENT', 'browser.emulateMedia takes { colorScheme?, reducedMotion? }');
+      }
+      rejectUnknownOptions('browser.emulateMedia', media, MEDIA_KEYS);
+      for (const key of MEDIA_KEYS) {
+        const problem = mediaProblem((name) => `browser.emulateMedia({ ${name} })`, key, media[key]);
+        if (problem !== undefined) throw new TestError('INVALID_ARGUMENT', problem);
+      }
+      // Read once, so a test that changes its object later changes nothing here.
+      const requested = obj({ colorScheme: media.colorScheme, reducedMotion: media.reducedMotion });
+      await surface.guard(context.operation(), 'emulateMedia', () => surface.emulateMedia(requested));
+    },
     // Async so the harness records the registration as a `browser.onDialog` step.
     async onDialog(handler: DialogHandler) {
       const unsubscribe = surface.dialogs.add(handler);
@@ -649,6 +672,7 @@ export function createBrowserFixture(surface: PlaywrightSurface, context: Engine
     cookies: action,
     setCookies: action,
     setViewport: action,
+    emulateMedia: { ...action, label: (media) => mediaLabel(media) },
     onDialog: action,
     waitForDownload: { ...action, timeout: (_trigger, options) => options?.timeout },
     keyboard: { press: { ...action, label: (key) => key }, type: { ...action, label: (text) => `${text.length} chars` } },

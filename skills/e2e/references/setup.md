@@ -188,6 +188,7 @@ start a script that brings them up and serves the app.
 | `basicAuth` | `{ username, password }` for a `401` challenge; `password` may be `secrets.get('name')`, resolved per attempt and redacted like any secret, the base64 `Authorization` credential too. |
 | `userAgent` | The `User-Agent` every attempt sends and `navigator.userAgent` reports. |
 | `locale`, `timezoneId` | The language (`'de-DE'`: `navigator.language`, `Intl`, `Accept-Language`) and IANA time zone (`'Europe/Berlin'`) every attempt runs in. |
+| `colorScheme`, `reducedMotion` | The `prefers-color-scheme` (`'light'`, `'dark'`, `'no-preference'`) and `prefers-reduced-motion` (`'reduce'`, `'no-preference'`) every page reports to its `@media` rules and `matchMedia`, from first paint. |
 | `initScripts` | Scripts every document runs before the page's own: source, `{ path }`, or a function with no closures. |
 | `testIdAttribute` | What `getByTestId` reads; default `data-testid`. |
 | `screencast` | `{ size?, quality? }` for the engine's own video: frame size (default the viewport's), JPEG quality 0 to 100. |

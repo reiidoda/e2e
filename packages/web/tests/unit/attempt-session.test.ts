@@ -6,6 +6,7 @@ import type { Browser, Page } from 'playwright-core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { connectCdp } from '../../src/browser-connection.ts';
 import { AttemptSession } from '../../src/attempt-session.ts';
+import type { WebMedia } from '../../src/media.ts';
 
 vi.mock('../../src/browser-connection.ts', () => ({ connectCdp: vi.fn() }));
 
@@ -55,9 +56,11 @@ function session(options: {
   configure?: () => Promise<void>;
   artifactsDir?: string;
   viewport?: { width: number; height: number } | null;
+  media?: WebMedia;
 } = {}) {
   return new AttemptSession({
     artifactsDir: options.artifactsDir ?? tmpdir(), viewport: options.viewport === undefined ? { width: 320, height: 200 } : options.viewport, contextOptions: {}, screencast: {},
+    media: options.media ?? {},
     acquire: async () => { throw new Error('persistent attempts never acquire the shared browser'); },
     configure: options.configure ?? (async () => undefined),
     persistent: { provision: options.provision ?? (() => 'provisioned'), reconnect: options.reconnect ?? (() => 'existing'), usedContexts: options.used ?? new Set() },
@@ -133,7 +136,7 @@ describe('AttemptSession', () => {
     const newPage = vi.fn(async () => opened);
     const context = { pages: () => [existing], newPage, close: async () => undefined };
     const owner = new AttemptSession({
-      artifactsDir: tmpdir(), viewport: { width: 320, height: 200 }, contextOptions: {}, screencast: {},
+      artifactsDir: tmpdir(), viewport: { width: 320, height: 200 }, contextOptions: {}, screencast: {}, media: {},
       acquire: async () => ({ newContext: async () => context }) as unknown as Browser,
       configure: async () => undefined,
     });
@@ -163,6 +166,45 @@ describe('AttemptSession', () => {
     for (const [called] of setViewportSize.mock.calls) expect(called).toEqual({ width: 390, height: 600 });
     await owner.setViewport({ width: 800, height: 600 });
     expect(setViewportSize).toHaveBeenLastCalledWith({ width: 800, height: 600 });
+    await owner.close(cleanup());
+  });
+
+  it('emulates the configured media on each page it opens, and merges a change into it for the rest of the attempt', async () => {
+    const current = remote('current');
+    const initial = target('initial');
+    const opened = target('opened');
+    const emulated: Array<[string, WebMedia]> = [];
+    let closed = false;
+    Object.assign(initial.page, { isClosed: () => closed, emulateMedia: async (media: WebMedia) => { emulated.push(['initial', media]); } });
+    Object.assign(opened.page, { emulateMedia: async (media: WebMedia) => { emulated.push(['opened', media]); } });
+    current.pages.push(initial.page);
+    const context = { ...current.browser.contexts()[0]!, newPage: async () => opened.page };
+    Object.assign(current.browser, { contexts: () => [context] });
+    vi.mocked(connectCdp).mockResolvedValue(current.browser);
+    const owner = session({ media: { colorScheme: 'dark' } });
+    await owner.start(new AbortController().signal);
+    await owner.ensurePage();
+    expect(emulated).toEqual([['initial', { colorScheme: 'dark' }]]);
+    await owner.emulateMedia({ reducedMotion: 'reduce' });
+    expect(emulated.at(-1)).toEqual(['initial', { colorScheme: 'dark', reducedMotion: 'reduce' }]);
+    await owner.emulateMedia({ colorScheme: 'light' });
+    closed = true;
+    await owner.ensurePage();
+    expect(emulated.at(-1)).toEqual(['opened', { colorScheme: 'light', reducedMotion: 'reduce' }]);
+    await owner.close(cleanup());
+  });
+
+  it('leaves the browser\'s own media alone when none is configured or requested', async () => {
+    const current = remote('current');
+    const active = target('page');
+    const emulateMedia = vi.fn(async () => undefined);
+    Object.assign(active.page, { emulateMedia });
+    current.pages.push(active.page);
+    vi.mocked(connectCdp).mockResolvedValue(current.browser);
+    const owner = session();
+    await owner.start(new AbortController().signal);
+    await owner.ensurePage();
+    expect(emulateMedia).not.toHaveBeenCalled();
     await owner.close(cleanup());
   });
 
