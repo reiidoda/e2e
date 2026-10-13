@@ -144,7 +144,7 @@ describe('media emulation', () => {
     }
   });
 
-  it('starts a tab the app opens itself from the configured media, not a test\'s change', async () => {
+  it('gives a tab the app opens itself a test\'s change, as it appears and later', async () => {
     const engine = await boot({ colorScheme: 'dark' });
     try {
       await fixtureOf(engine).emulateMedia({ colorScheme: 'light' });
@@ -155,7 +155,14 @@ describe('media emulation', () => {
         live.page().evaluate(() => { window.open('/media'); }),
       ]);
       await popup.waitForLoadState('load');
-      expect(await popup.evaluate(() => (window as unknown as { atLoad: unknown }).atLoad)).toEqual({ dark: true, reduce: false });
+      const now = () => popup.evaluate(() => ({
+        dark: matchMedia('(prefers-color-scheme: dark)').matches,
+        reduce: matchMedia('(prefers-reduced-motion: reduce)').matches,
+      }));
+      expect(await now()).toEqual({ dark: false, reduce: false });
+      await fixtureOf(engine).emulateMedia({ reducedMotion: 'reduce' });
+      expect(await now()).toEqual({ dark: false, reduce: true });
+      expect(await read(engine)).toMatchObject({ dark: false, reduce: true });
     } finally {
       await shutdown(engine);
     }

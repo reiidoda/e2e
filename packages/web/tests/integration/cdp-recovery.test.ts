@@ -152,6 +152,13 @@ describe('CDP session recovery', () => {
       await surfaceOf(engine)!.context().browser()!.close();
       expect((await engine.locate!(heading, operation()))[0]?.name).toBe('Login');
       expect(await media()).toEqual({ dark: true, reduce: true });
+      const live = surfaceOf(engine)!;
+      const [popup] = await Promise.all([
+        live.context().waitForEvent('page'),
+        live.page().evaluate(() => { window.open('/'); }),
+      ]);
+      await popup.waitForLoadState('load');
+      expect(await popup.evaluate(() => matchMedia('(prefers-reduced-motion: reduce)').matches)).toBe(true);
     } finally {
       await engine.dispose!(cleanup());
       await closeRemoteChrome(remote);

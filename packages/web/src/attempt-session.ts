@@ -57,6 +57,8 @@ export class AttemptSession {
   private firstPage = true;
   private requestedViewport: { readonly width: number; readonly height: number } | undefined;
   private media: WebMedia;
+  /** The emulation each page got as it appeared, so the attempt's own page is ready before it shows. */
+  private readonly emulated = new WeakMap<Page, Promise<void>>();
 
   constructor(private readonly options: SessionOptions) {
     this.media = options.media;
@@ -175,6 +177,7 @@ export class AttemptSession {
       try {
         if (budget.signal.aborted) throw connectionAbort(budget.signal, 'connection');
         await this.options.configure(candidate.context);
+        this.watchPages(candidate.context);
         if (recover && candidate.page !== null) {
           const size = previous?.page?.viewportSize() ?? this.requestedViewport ?? this.options.viewport;
           if (size !== null) await candidate.page.setViewportSize(size);
@@ -213,7 +216,7 @@ export class AttemptSession {
       let identity = binding.identity;
       const size = this.requestedViewport ?? (identity === undefined ? null : this.options.viewport);
       if (size !== null) await page.setViewportSize(size);
-      await this.applyMedia(page);
+      await (this.emulated.get(page) ?? this.applyMedia(page));
       if (identity !== undefined) identity = { ...identity, target: await targetIdentity(page) };
       this.check(token);
       await this.video.pageOpened(page);
@@ -259,19 +262,33 @@ export class AttemptSession {
   }
 
   /**
-   * Emulates media features on the open page, if any, and every page this
-   * attempt opens after it; a feature `media` leaves out keeps its value.
+   * Emulates media features on every open tab and every tab opened after
+   * them, the app's own included; a feature `media` leaves out keeps its value.
    */
   async emulateMedia(media: WebMedia): Promise<void> {
     // Merged before the await, so a second call made meanwhile builds on this one instead of the old value.
     this.media = { ...this.media, ...media };
-    const page = this.current().page;
-    if (page !== null && !page.isClosed()) await page.emulateMedia(this.media);
+    const open = this.current().context.pages().filter((page) => !page.isClosed());
+    await Promise.all(open.map((page) => page.emulateMedia(this.media)));
   }
 
   /** Sets the attempt's media features on a page before it shows anything; a page with none set keeps the browser's own. */
   private async applyMedia(page: Page): Promise<void> {
     if (Object.keys(this.media).length > 0) await page.emulateMedia(this.media);
+  }
+
+  /**
+   * Emulates the attempt's media on each tab as it appears, so a tab the app
+   * opens itself follows a test's change too, on a persistent context as
+   * well, where the engine sets no context options. A tab the attempt opens
+   * awaits the same work in `ensurePage`; a tab the app opens is not awaited.
+   */
+  private watchPages(context: BrowserContext): void {
+    context.on('page', (page) => {
+      const applied = this.applyMedia(page);
+      this.emulated.set(page, applied);
+      applied.catch(() => undefined);
+    });
   }
 
   /** Restarts the document while retaining this context's storage. */

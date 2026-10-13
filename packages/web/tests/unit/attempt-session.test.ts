@@ -23,15 +23,23 @@ interface Contexts { browserContextIds: string[]; defaultBrowserContextId?: stri
 function remote(identity?: string, response?: Promise<Contexts>) {
   let connected = true;
   const pages: Page[] = [];
+  const appeared: Array<(page: Page) => void> = [];
   const send = vi.fn(async () => response ?? { browserContextIds: [], ...(identity === undefined ? {} : { defaultBrowserContextId: identity }) });
   const close = vi.fn(async () => { connected = false; });
   const browser = {
     newBrowserCDPSession: async () => ({ send, detach: async () => undefined }),
-    contexts: () => [{ pages: () => pages, newPage: async () => pages.at(-1)!, _channel: { registerSelectorEngine: async () => undefined } }],
+    contexts: () => [{
+      pages: () => pages,
+      newPage: async () => pages.at(-1)!,
+      on: (_event: 'page', listener: (page: Page) => void) => { appeared.push(listener); },
+      _channel: { registerSelectorEngine: async () => undefined },
+    }],
     isConnected: () => connected,
     close,
   } as unknown as Browser;
-  return { browser, send, close, pages, disconnect: () => { connected = false; } };
+  /** The app opens a tab of its own. */
+  const popup = (page: Page) => { pages.push(page); for (const listener of appeared) listener(page); };
+  return { browser, send, close, pages, popup, disconnect: () => { connected = false; } };
 }
 
 /** A page target whose identity response may outlive its attempt. */
@@ -134,7 +142,7 @@ describe('AttemptSession', () => {
     const existing = target('existing').page;
     const opened = target('opened').page;
     const newPage = vi.fn(async () => opened);
-    const context = { pages: () => [existing], newPage, close: async () => undefined };
+    const context = { pages: () => [existing], newPage, on: () => undefined, close: async () => undefined };
     const owner = new AttemptSession({
       artifactsDir: tmpdir(), viewport: { width: 320, height: 200 }, contextOptions: {}, screencast: {}, media: {},
       acquire: async () => ({ newContext: async () => context }) as unknown as Browser,
@@ -191,6 +199,29 @@ describe('AttemptSession', () => {
     closed = true;
     await owner.ensurePage();
     expect(emulated.at(-1)).toEqual(['opened', { colorScheme: 'light', reducedMotion: 'reduce' }]);
+    await owner.close(cleanup());
+  });
+
+  it('emulates the attempt\'s media on a tab the app opens itself, as it appears and when a test changes it', async () => {
+    const current = remote('current');
+    const initial = target('initial');
+    const emulated: Array<[string, WebMedia]> = [];
+    Object.assign(initial.page, { emulateMedia: async (media: WebMedia) => { emulated.push(['initial', media]); } });
+    current.pages.push(initial.page);
+    vi.mocked(connectCdp).mockResolvedValue(current.browser);
+    const owner = session({ media: { colorScheme: 'dark' } });
+    await owner.start(new AbortController().signal);
+    await owner.ensurePage();
+    const popup = target('popup').page;
+    Object.assign(popup, { emulateMedia: async (media: WebMedia) => { emulated.push(['popup', media]); } });
+    current.popup(popup);
+    await Promise.resolve();
+    expect(emulated.at(-1)).toEqual(['popup', { colorScheme: 'dark' }]);
+    await owner.emulateMedia({ reducedMotion: 'reduce' });
+    expect(emulated.slice(-2)).toEqual([
+      ['initial', { colorScheme: 'dark', reducedMotion: 'reduce' }],
+      ['popup', { colorScheme: 'dark', reducedMotion: 'reduce' }],
+    ]);
     await owner.close(cleanup());
   });
 

@@ -487,7 +487,7 @@ export class PlaywrightSurface {
         ...(this.userAgent === undefined ? {} : { userAgent: this.userAgent }),
         ...(this.locale === undefined ? {} : { locale: this.locale }),
         ...(this.timezoneId === undefined ? {} : { timezoneId: this.timezoneId }),
-        // On the context too, so a tab the app opens itself starts from the configured values.
+        // On the context too, so a tab the app opens itself paints with the configured values before the session reaches it.
         ...this.media,
         ...(this.headers === undefined ? {} : { serviceWorkers: 'block' as const }),
       },

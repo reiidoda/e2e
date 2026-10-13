@@ -248,11 +248,11 @@ export interface Browser extends Expectable<BrowserExpectation> {
   /** Sets the viewport size. */
   setViewport(size: { width: number; height: number }): Promise<void>;
   /**
-   * Emulates CSS media features on the active tab and every tab the attempt
-   * opens after it, for the rest of the attempt, as Playwright's `page.emulateMedia`
-   * does: the page's `@media` rules and `matchMedia` both read them. A
-   * feature left out keeps its value. Works before the first navigation, so
-   * the page loads with them.
+   * Emulates CSS media features on every open tab and every tab opened after
+   * them, the app's own included, for the rest of the attempt, as Playwright's
+   * `page.emulateMedia` does: the page's `@media` rules and `matchMedia` both
+   * read them. A feature left out keeps its value. Works before the first
+   * navigation, so the page loads with them.
    */
   emulateMedia(media: WebMedia): Promise<void>;
   /** Registers an attempt-scoped dialog handler and returns an unsubscribe function. */

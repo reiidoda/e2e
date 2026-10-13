@@ -326,7 +326,7 @@ export interface Browser extends Expectable<BrowserExpectation> {
   setCookies(cookies: readonly Cookie[]): Promise<void>;
   /** Sets the viewport size. */
   setViewport(size: { width: number; height: number }): Promise<void>;
-  /** Emulates CSS media features on the active tab and every tab the attempt opens after it. */
+  /** Emulates CSS media features on every open tab and every tab opened after them. */
   emulateMedia(media: WebMedia): Promise<void>;
   /** Registers an attempt-scoped dialog handler and returns an unsubscribe function. */
   onDialog(handler: DialogHandler): Promise<() => Promise<void>>;
@@ -626,11 +626,10 @@ paint. A persistent context takes them too: the engine sets them on each
 page it opens. Each defaults to the browser's own.
 
 `browser.emulateMedia(media)` changes them for the rest of the attempt, on
-the active tab and every tab the attempt opens after it, through
-`app.restart()` and `app.clearState()`. It works before the first
-navigation, so the next `app.open` loads with them. A feature it leaves out
-keeps its value. A tab the app opens itself starts from the configured
-values, and from none on a persistent context. A
+every open tab and every tab opened after them, through `app.restart()` and
+`app.clearState()`. It works before the first navigation, so the next
+`app.open` loads with them. A feature it leaves out keeps its value. A tab
+the app opens itself gets them as it appears, on a persistent context too. A
 feature or value outside `WebMedia` is `INVALID_CONFIG` in `web()` and
 `INVALID_ARGUMENT` in `emulateMedia`.
 
