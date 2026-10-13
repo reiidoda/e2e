@@ -225,6 +225,27 @@ describe('AttemptSession', () => {
     await owner.close(cleanup());
   });
 
+  it('ignores a tab the app closes while the media reaches it, and reports one still open', async () => {
+    const current = remote('current');
+    const initial = target('initial');
+    Object.assign(initial.page, { emulateMedia: async () => undefined });
+    current.pages.push(initial.page);
+    vi.mocked(connectCdp).mockResolvedValue(current.browser);
+    const owner = session({ media: { colorScheme: 'dark' } });
+    await owner.start(new AbortController().signal);
+    await owner.ensurePage();
+    let closed = false;
+    const closing = target('closing').page;
+    Object.assign(closing, { isClosed: () => closed, emulateMedia: async () => { closed = true; throw new Error('Target page, context or browser has been closed'); } });
+    current.pages.push(closing);
+    await expect(owner.emulateMedia({ reducedMotion: 'reduce' })).resolves.toBeUndefined();
+    const broken = target('broken').page;
+    Object.assign(broken, { emulateMedia: async () => { throw new Error('Protocol error'); } });
+    current.pages.push(broken);
+    await expect(owner.emulateMedia({ colorScheme: 'light' })).rejects.toThrow('Protocol error');
+    await owner.close(cleanup());
+  });
+
   it('keeps both concurrent media changes when the first call finishes last', async () => {
     const current = remote('current');
     const active = target('page');

@@ -182,7 +182,8 @@ export class AttemptSession {
           const size = previous?.page?.viewportSize() ?? this.requestedViewport ?? this.options.viewport;
           if (size !== null) await candidate.page.setViewportSize(size);
           // Emulation belongs to the CDP session that set it, so the new transport sets it again, on the app's own tabs too.
-          await Promise.all(candidate.context.pages().filter((page) => !page.isClosed()).map((page) => this.applyMedia(page)));
+          await this.applyMedia(candidate.page);
+          await this.emulateOnOthers(candidate.context, candidate.page, (page) => this.applyMedia(page));
           await this.video.pageOpened(candidate.page);
         }
         if (budget.signal.aborted) throw connectionAbort(budget.signal, 'connection');
@@ -268,8 +269,25 @@ export class AttemptSession {
   async emulateMedia(media: WebMedia): Promise<void> {
     // Merged before the await, so a second call made meanwhile builds on this one instead of the old value.
     this.media = { ...this.media, ...media };
-    const open = this.current().context.pages().filter((page) => !page.isClosed());
-    await Promise.all(open.map((page) => page.emulateMedia(this.media)));
+    const { context, page } = this.current();
+    if (page !== null && !page.isClosed()) await page.emulateMedia(this.media);
+    await this.emulateOnOthers(context, page, (other) => other.emulateMedia(this.media));
+  }
+
+  /**
+   * Runs `emulate` on every open tab but the attempt's own. A tab the app
+   * closes meanwhile fails its own call only; an error on a tab still open
+   * propagates.
+   */
+  private async emulateOnOthers(context: BrowserContext, own: Page | null, emulate: (page: Page) => Promise<void>): Promise<void> {
+    const others = context.pages().filter((page) => page !== own && !page.isClosed());
+    await Promise.all(others.map(async (page) => {
+      try {
+        await emulate(page);
+      } catch (cause) {
+        if (!page.isClosed()) throw cause;
+      }
+    }));
   }
 
   /** Sets the attempt's media features on a page before it shows anything; a page with none set keeps the browser's own. */
