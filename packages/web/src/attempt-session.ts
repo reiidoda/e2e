@@ -181,8 +181,8 @@ export class AttemptSession {
         if (recover && candidate.page !== null) {
           const size = previous?.page?.viewportSize() ?? this.requestedViewport ?? this.options.viewport;
           if (size !== null) await candidate.page.setViewportSize(size);
-          // Emulation belongs to the CDP session that set it, so the new transport sets it again.
-          await this.applyMedia(candidate.page);
+          // Emulation belongs to the CDP session that set it, so the new transport sets it again, on the app's own tabs too.
+          await Promise.all(candidate.context.pages().filter((page) => !page.isClosed()).map((page) => this.applyMedia(page)));
           await this.video.pageOpened(candidate.page);
         }
         if (budget.signal.aborted) throw connectionAbort(budget.signal, 'connection');
@@ -280,8 +280,10 @@ export class AttemptSession {
   /**
    * Emulates the attempt's media on each tab as it appears, so a tab the app
    * opens itself follows a test's change too, on a persistent context as
-   * well, where the engine sets no context options. A tab the attempt opens
-   * awaits the same work in `ensurePage`; a tab the app opens is not awaited.
+   * well, where the engine sets no context options. It paints with the
+   * context's configured values first: Playwright emulates per page, so a
+   * test's change reaches it once it exists. A tab the attempt opens awaits
+   * the same work in `ensurePage`; a tab the app opens is not awaited.
    */
   private watchPages(context: BrowserContext): void {
     context.on('page', (page) => {
