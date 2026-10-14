@@ -1519,12 +1519,12 @@ describe('device fixture', () => {
     await device.setBiometrics('fingerprint', 'nonmatch');
     await device.enrollBiometrics('touchid', true);
     await device.openApp('Reminders', { relaunch: true });
+    await device.closeApp();
     expect(await device.foregroundApp()).toEqual({ name: 'Settings', bundleId: 'com.apple.Preferences' });
     await device.home();
     await device.back();
     await device.alert('accept');
     await device.dismissKeyboard();
-    await device.closeApp();
     expect(await device.clipboard()).toBe('pasted');
     await device.setClipboard('x');
     expect(h.fake.calls.slice(before).map((call) => [call.method, call.args])).toEqual([
@@ -1538,13 +1538,13 @@ describe('device fixture', () => {
       ['settings.update', { platform: 'ios', setting: 'fingerprint', state: 'nonmatch' }],
       ['settings.update', { platform: 'ios', setting: 'touchid', state: 'enroll' }],
       ['apps.open', { app: 'Reminders', platform: 'ios', relaunch: true }],
-      ['command.appState', { platform: 'ios' }],
+      // The close names the app the session observed, so agent-device terminates it before the session ends.
+      ['apps.close', { app: 'com.apple.Preferences' }],
+      ['command.appState', {}],
       ['command.home', { platform: 'ios' }],
       ['command.back', { settle: true, settleQuietMs: 150 }],
       ['command.alert', { platform: 'ios', action: 'accept' }],
       ['command.keyboard', { action: 'dismiss' }],
-      // The close names the app the session observed, so agent-device terminates it before the session ends.
-      ['apps.close', { app: 'com.apple.Preferences' }],
       ['command.clipboard', { platform: 'ios', action: 'read' }],
       ['command.clipboard', { platform: 'ios', action: 'write', text: 'x' }],
     ]);
@@ -1664,8 +1664,9 @@ describe('device fixture', () => {
     h.fake.respond('command.appState', () => ({ platform, appName: 'Example', appBundleId: 'com.example.app' }));
     await fixture(h).home();
     expect(h.fake.lastArgs('command.home')).toEqual(selection);
+    // foregroundApp reads the open session, so it carries no selection.
     await fixture(h).foregroundApp();
-    expect(h.fake.lastArgs('command.appState')).toEqual(selection);
+    expect(h.fake.lastArgs('command.appState')).toEqual({});
     await h.surface.closeApp(operation().signal);
     await h.engine.endAttempt!(cleanup());
     await h.engine.startAttempt!({ attemptId: 'a2', artifactsDir, signal: operation().signal, resolveSecret: noSecrets, ...ignoreTrace });
